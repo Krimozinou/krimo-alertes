@@ -8,9 +8,11 @@ require("dotenv").config();
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, "public")));
 
-const DATA_PATH = path.join(__dirname, "data", "alert.json");
+// ✅ Servir les fichiers statiques depuis la racine du repo
+app.use(express.static(__dirname));
+
+const DATA_PATH = path.join(__dirname, "alert.json");
 
 function readAlert() {
   try {
@@ -22,7 +24,6 @@ function readAlert() {
 }
 
 function writeAlert(data) {
-  fs.mkdirSync(path.dirname(DATA_PATH), { recursive: true });
   fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2), "utf-8");
 }
 
@@ -37,12 +38,22 @@ function authMiddleware(req, res, next) {
   }
 }
 
-// --- API publique ---
+// Page d'accueil
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+// Admin
+app.get("/admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "admin.html"));
+});
+
+// API publique
 app.get("/api/alert", (req, res) => {
   res.json(readAlert());
 });
 
-// --- Auth ---
+// Login
 app.post("/api/login", (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ ok: false, error: "Champs manquants" });
@@ -55,7 +66,7 @@ app.post("/api/login", (req, res) => {
   res.cookie("krimo_token", token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: false // passe à true quand ton site est en HTTPS (Render = HTTPS)
+    secure: false
   });
 
   res.json({ ok: true });
@@ -66,10 +77,9 @@ app.post("/api/logout", (req, res) => {
   res.json({ ok: true });
 });
 
-// --- API admin ---
+// Publier alerte (admin)
 app.post("/api/admin/alert", authMiddleware, (req, res) => {
   const { active, level, title, message } = req.body || {};
-
   const allowed = ["none", "yellow", "orange", "red"];
   if (!allowed.includes(level)) return res.status(400).json({ ok: false, error: "Niveau invalide" });
 
@@ -83,11 +93,6 @@ app.post("/api/admin/alert", authMiddleware, (req, res) => {
 
   writeAlert(payload);
   res.json({ ok: true, alert: payload });
-});
-
-// Route admin (page)
-app.get("/admin", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "admin.html"));
 });
 
 const PORT = process.env.PORT || 3000;
