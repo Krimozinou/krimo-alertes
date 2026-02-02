@@ -79,17 +79,18 @@ app.post("/api/logout", (req, res) => {
 
 // Publier alerte (admin)
 app.post("/api/admin/alert", authMiddleware, (req, res) => {
-  const { active, level, title, message } = req.body || {};
+  const { active, level, region, title, message } = req.body || {};
   const allowed = ["none", "yellow", "orange", "red"];
   if (!allowed.includes(level)) return res.status(400).json({ ok: false, error: "Niveau invalide" });
 
   const payload = {
-    active: Boolean(active) && level !== "none",
-    level,
-    title: String(title || (level === "none" ? "Aucune alerte" : "ALERTE MÉTÉO")).slice(0, 80),
-    message: String(message || "").slice(0, 400),
-    updatedAt: new Date().toISOString()
-  };
+  active: Boolean(active) && level !== "none",
+  level,
+  region: String(region || "Aucune"),
+  title: String(title || (level === "none" ? "Aucune alerte" : "ALERTE MÉTÉO")).slice(0, 80),
+  message: String(message || "").slice(0, 400),
+  updatedAt: new Date().toISOString()
+};
 
   writeAlert(payload);
   res.json({ ok: true, alert: payload });
