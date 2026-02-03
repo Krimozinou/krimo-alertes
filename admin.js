@@ -4,16 +4,28 @@ const loginMsg = document.getElementById("loginMsg");
 const saveMsg = document.getElementById("saveMsg");
 const logoutBtn = document.getElementById("logoutBtn");
 
-function toDatetimeLocal(iso) {
+function toLocalDatetimeValue(iso) {
   if (!iso) return "";
-  // iso -> "YYYY-MM-DDTHH:MM"
-  return iso.slice(0, 16);
+  const d = new Date(iso);
+  // datetime-local attend "YYYY-MM-DDTHH:mm"
+  const pad = (n) => String(n).padStart(2, "0");
+  return (
+    d.getFullYear() +
+    "-" +
+    pad(d.getMonth() + 1) +
+    "-" +
+    pad(d.getDate()) +
+    "T" +
+    pad(d.getHours()) +
+    ":" +
+    pad(d.getMinutes())
+  );
 }
 
-function toISO(dtLocal) {
-  // "YYYY-MM-DDTHH:MM" -> ISO
-  if (!dtLocal) return "";
-  return new Date(dtLocal).toISOString();
+function fromLocalDatetimeValue(value) {
+  if (!value) return "";
+  // On convertit en ISO pour le serveur
+  return new Date(value).toISOString();
 }
 
 async function loadCurrent() {
@@ -21,12 +33,11 @@ async function loadCurrent() {
   const data = await r.json();
 
   document.getElementById("level").value = data.level || "none";
-  document.getElementById("region").value = data.region || "OUEST";
+  document.getElementById("region").value = data.region || "Adrar";
   document.getElementById("title").value = data.title || "";
   document.getElementById("message").value = data.message || "";
-
-  document.getElementById("startAt").value = toDatetimeLocal(data.startAt);
-  document.getElementById("endAt").value = toDatetimeLocal(data.endAt);
+  document.getElementById("startAt").value = toLocalDatetimeValue(data.startAt);
+  document.getElementById("endAt").value = toLocalDatetimeValue(data.endAt);
 }
 
 document.getElementById("loginBtn").addEventListener("click", async () => {
@@ -35,24 +46,28 @@ document.getElementById("loginBtn").addEventListener("click", async () => {
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value;
 
-  const res = await fetch("/api/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password })
-  });
+  try {
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
 
-  const out = await res.json().catch(() => ({}));
+    const out = await res.json().catch(() => ({}));
 
-  if (!res.ok || !out.ok) {
-    loginMsg.textContent = out.error || "Erreur de connexion";
-    return;
+    if (!res.ok || !out.ok) {
+      loginMsg.textContent = out.error || "Erreur de connexion";
+      return;
+    }
+
+    loginBox.style.display = "none";
+    panel.style.display = "block";
+    logoutBtn.style.display = "inline-block";
+
+    await loadCurrent();
+  } catch (e) {
+    loginMsg.textContent = "Erreur réseau";
   }
-
-  loginBox.style.display = "none";
-  panel.style.display = "block";
-  logoutBtn.style.display = "inline-block";
-
-  await loadCurrent();
 });
 
 logoutBtn.addEventListener("click", async () => {
@@ -62,54 +77,83 @@ logoutBtn.addEventListener("click", async () => {
 
 document.getElementById("saveBtn").addEventListener("click", async () => {
   saveMsg.textContent = "Enregistrement...";
+  saveMsg.style.color = "#111";
 
   const level = document.getElementById("level").value;
   const region = document.getElementById("region").value;
-  const title = document.getElementById("title").value.trim();
+  const titleInput = document.getElementById("title").value.trim();
   const message = document.getElementById("message").value.trim();
-
-  const startAtLocal = document.getElementById("startAt").value;
-  const endAtLocal = document.getElementById("endAt").value;
+  const startAt = fromLocalDatetimeValue(document.getElementById("startAt").value);
+  const endAt = fromLocalDatetimeValue(document.getElementById("endAt").value);
 
   const payload = {
     level,
+    active: level !== "none",
     region,
-    title: title || (level === "none" ? "Aucune alerte" : "ALERTE MÉTÉO"),
-    message: message || "",
-    startAt: toISO(startAtLocal),
-    endAt: toISO(endAtLocal)
+    title: titleInput || (level === "none" ? "Aucune alerte" : "ALERTE MÉTÉO"),
+    message,
+    startAt,
+    endAt,
   };
 
-  const res = await fetch("/api/alert", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
+  try {
+    const res = await fetch("/api/alert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-  const out = await res.json().catch(() => ({}));
-  if (!res.ok || !out.ok) {
-    saveMsg.textContent = out.error || "Erreur";
-    return;
+    const out = await res.json().catch(() => ({}));
+
+    if (!res.ok || !out.ok) {
+      saveMsg.textContent = out.error || "Erreur";
+      saveMsg.style.color = "#b00020";
+      return;
+    }
+
+    saveMsg.textContent = "✅ Publiée";
+    saveMsg.style.color = "#0a7a2f";
+  } catch (e) {
+    saveMsg.textContent = "Erreur réseau";
+    saveMsg.style.color = "#b00020";
   }
-
-  saveMsg.textContent = "✅ Publié";
-  setTimeout(() => (saveMsg.textContent = ""), 2000);
 });
 
 document.getElementById("disableBtn").addEventListener("click", async () => {
   saveMsg.textContent = "Désactivation...";
+  saveMsg.style.color = "#111";
 
-  const res = await fetch("/api/disable", {
-    method: "POST"
-  });
+  const payload = {
+    active: false,
+    level: "none",
+    region: document.getElementById("region").value || "Adrar",
+    title: "Aucune alerte",
+    message: "",
+    startAt: "",
+    endAt: "",
+  };
 
-  const out = await res.json().catch(() => ({}));
-  if (!res.ok || !out.ok) {
-    saveMsg.textContent = out.error || "Erreur";
-    return;
+  try {
+    const res = await fetch("/api/alert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const out = await res.json().catch(() => ({}));
+
+    if (!res.ok || !out.ok) {
+      saveMsg.textContent = out.error || "Erreur";
+      saveMsg.style.color = "#b00020";
+      return;
+    }
+
+    saveMsg.textContent = "✅ Désactivée";
+    saveMsg.style.color = "#0a7a2f";
+
+    await loadCurrent();
+  } catch (e) {
+    saveMsg.textContent = "Erreur réseau";
+    saveMsg.style.color = "#b00020";
   }
-
-  await loadCurrent();
-  saveMsg.textContent = "✅ Désactivée";
-  setTimeout(() => (saveMsg.textContent = ""), 2000);
 });
