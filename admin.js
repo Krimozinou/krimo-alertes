@@ -4,31 +4,6 @@ const loginMsg = document.getElementById("loginMsg");
 const saveMsg = document.getElementById("saveMsg");
 const logoutBtn = document.getElementById("logoutBtn");
 
-// ------- Helpers -------
-function toLocalInputValue(iso) {
-  // iso -> "YYYY-MM-DDTHH:MM"
-  return iso ? iso.slice(0, 16) : "";
-}
-
-function toISOFromLocalInput(v) {
-  // "YYYY-MM-DDTHH:MM" -> ISO (UTC)
-  return v ? new Date(v).toISOString() : "";
-}
-
-function getSelectedRegions() {
-  const zonesSel = document.getElementById("zones");
-  return Array.from(zonesSel.selectedOptions).map((o) => o.value);
-}
-
-function setSelectedRegions(regions) {
-  const zonesSel = document.getElementById("zones");
-  const list = Array.isArray(regions) ? regions : [];
-  for (const opt of zonesSel.options) {
-    opt.selected = list.includes(opt.value);
-  }
-}
-
-// ------- Load current alert -------
 async function loadCurrent() {
   const r = await fetch("/api/alert", { cache: "no-store" });
   const data = await r.json();
@@ -37,28 +12,29 @@ async function loadCurrent() {
   document.getElementById("title").value = data.title || "";
   document.getElementById("message").value = data.message || "";
 
-  document.getElementById("startAt").value = toLocalInputValue(data.startAt);
-  document.getElementById("endAt").value = toLocalInputValue(data.endAt);
+  document.getElementById("startAt").value = data.startAt ? data.startAt.slice(0,16) : "";
+  document.getElementById("endAt").value = data.endAt ? data.endAt.slice(0,16) : "";
 
-  // ✅ multi wilayas: regions[] (compat si server renvoie encore region)
+  // ✅ regions (multi)
+  const regionsSel = document.getElementById("zones"); // ton select multi garde id="zones"
   const regions = Array.isArray(data.regions)
     ? data.regions
     : (data.region ? [data.region] : []);
 
-  setSelectedRegions(regions);
+  for (const opt of regionsSel.options) {
+    opt.selected = regions.includes(opt.value);
+  }
 }
 
-// ------- Login -------
 document.getElementById("loginBtn").addEventListener("click", async () => {
   loginMsg.textContent = "";
-
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value;
 
   const res = await fetch("/api/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password })
   });
 
   const out = await res.json().catch(() => ({}));
@@ -73,48 +49,41 @@ document.getElementById("loginBtn").addEventListener("click", async () => {
   await loadCurrent();
 });
 
-// ------- Logout -------
 logoutBtn.addEventListener("click", async () => {
   await fetch("/api/logout", { method: "POST" }).catch(() => {});
   location.reload();
 });
 
-// ------- Publier -------
+// ✅ Publier
 document.getElementById("saveBtn").addEventListener("click", async () => {
   saveMsg.textContent = "Enregistrement...";
   saveMsg.style.color = "#111";
 
   const level = document.getElementById("level").value;
-  const titleInput = document.getElementById("title").value.trim();
+  const title = document.getElementById("title").value.trim();
   const message = document.getElementById("message").value.trim();
+  const startAt = document.getElementById("startAt").value;
+  const endAt = document.getElementById("endAt").value;
 
-  const startAtLocal = document.getElementById("startAt").value;
-  const endAtLocal = document.getElementById("endAt").value;
-
-  // ✅ regions multi
-  const regions = getSelectedRegions();
-
-  // ✅ titre par défaut propre
-  const title =
-    titleInput ||
-    (level === "none" ? "Aucune alerte" : "ALERTE MÉTÉO");
+  // ✅ multi regions
+  const regionsSel = document.getElementById("zones");
+  const regions = Array.from(regionsSel.selectedOptions).map(o => o.value);
 
   const payload = {
     level,
-    // active est recalculé par server.js aussi, mais on laisse cohérent
     active: level !== "none",
-    regions,                // ✅ nouveau champ officiel
-    region: regions[0] || "",// ✅ compat (facultatif mais utile)
-    title,
+    regions,
+    region: regions[0] || "", // compat
+    title: title || (level === "none" ? "Aucune alerte" : "ALERTE MÉTÉO"),
     message,
-    startAt: toISOFromLocalInput(startAtLocal),
-    endAt: toISOFromLocalInput(endAtLocal),
+    startAt: startAt ? new Date(startAt).toISOString() : "",
+    endAt: endAt ? new Date(endAt).toISOString() : ""
   };
 
   const res = await fetch("/api/alert", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(payload)
   });
 
   const out = await res.json().catch(() => ({}));
@@ -128,7 +97,7 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
   saveMsg.style.color = "#1b7f2a";
 });
 
-// ------- Désactiver -------
+// ✅ Désactiver
 document.getElementById("disableBtn").addEventListener("click", async () => {
   saveMsg.textContent = "Désactivation...";
   saveMsg.style.color = "#111";
@@ -141,13 +110,13 @@ document.getElementById("disableBtn").addEventListener("click", async () => {
     title: "Aucune alerte",
     message: "",
     startAt: "",
-    endAt: "",
+    endAt: ""
   };
 
   const res = await fetch("/api/alert", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(payload)
   });
 
   const out = await res.json().catch(() => ({}));
@@ -162,26 +131,25 @@ document.getElementById("disableBtn").addEventListener("click", async () => {
   await loadCurrent();
 });
 
-// ------- Recherche dans la liste -------
+// ✅ Recherche
 const zoneSearch = document.getElementById("zoneSearch");
 zoneSearch.addEventListener("input", () => {
   const q = zoneSearch.value.trim().toLowerCase();
-  const zonesSel = document.getElementById("zones");
-
-  for (const opt of zonesSel.options) {
+  const regionsSel = document.getElementById("zones");
+  for (const opt of regionsSel.options) {
     opt.style.display = opt.value.toLowerCase().includes(q) ? "" : "none";
   }
 });
 
-// ------- Tout sélectionner / Tout enlever -------
+// ✅ Tout sélectionner / tout enlever
 document.getElementById("selectAllBtn").addEventListener("click", () => {
-  const zonesSel = document.getElementById("zones");
-  for (const opt of zonesSel.options) {
+  const regionsSel = document.getElementById("zones");
+  for (const opt of regionsSel.options) {
     if (opt.style.display !== "none") opt.selected = true;
   }
 });
 
 document.getElementById("clearAllBtn").addEventListener("click", () => {
-  const zonesSel = document.getElementById("zones");
-  for (const opt of zonesSel.options) opt.selected = false;
+  const regionsSel = document.getElementById("zones");
+  for (const opt of regionsSel.options) opt.selected = false;
 });
