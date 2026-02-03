@@ -10,42 +10,27 @@ async function refresh() {
 
   const level = data.level || "none";
 
-  // ✅ Badge + Blink
   badge.className = "badge " + level + (data.active ? " blink" : "");
 
-  // ✅ Si aucune alerte
   if (!data.active || level === "none") {
     badge.textContent = "✅ Aucune alerte";
     title.textContent = "Aucune alerte";
     message.textContent = "";
     region.textContent = "";
-  }
-
-  // ✅ Si alerte active
-  else {
+  } else {
     badge.textContent =
-      level === "yellow"
-        ? "🟡 Vigilance Jaune"
-        : level === "orange"
-        ? "🟠 Vigilance Orange"
-        : level === "red"
-        ? "🔴 Vigilance Rouge"
-        : "⚠️ Alerte";
+      level === "yellow" ? "🟡 Vigilance Jaune" :
+      level === "orange" ? "🟠 Vigilance Orange" :
+      level === "red" ? "🔴 Vigilance Rouge" :
+      "⚠️ Alerte";
 
     title.textContent = data.title || "ALERTE MÉTÉO";
     message.textContent = data.message || "";
 
-    // ✅ Plusieurs wilayas affichées
-    const zones = Array.isArray(data.zones) ? data.zones : [];
-
-    if (zones.length > 0) {
-      region.textContent = "📍 Wilayas : " + zones.join(" - ");
-    } else {
-      region.textContent = "";
-    }
+    const regions = Array.isArray(data.regions) ? data.regions : [];
+    region.textContent = regions.length ? ("📍 Wilayas : " + regions.join(" - ")) : "";
   }
 
-  // ✅ Date mise à jour
   updatedAt.textContent = data.updatedAt
     ? new Date(data.updatedAt).toLocaleString("fr-FR")
     : "—";
@@ -54,19 +39,16 @@ async function refresh() {
 refresh();
 setInterval(refresh, 30000);
 
-// ✅ Bouton partager Facebook
+// ✅ Partager Facebook
 const shareFbBtn = document.getElementById("shareFbBtn");
 if (shareFbBtn) {
   shareFbBtn.addEventListener("click", () => {
     const url = encodeURIComponent(window.location.href);
-    window.open(
-      "https://www.facebook.com/sharer/sharer.php?u=" + url,
-      "_blank"
-    );
+    window.open("https://www.facebook.com/sharer/sharer.php?u=" + url, "_blank");
   });
 }
 
-// ✅ Copier le lien
+// ✅ Copier lien
 const copyLinkBtn = document.getElementById("copyLinkBtn");
 if (copyLinkBtn) {
   copyLinkBtn.addEventListener("click", async () => {
