@@ -2,47 +2,80 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Krimo Météo Algérie — Alertes</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <title>Krimo Météo Algérie – Alertes</title>
+
+  <!-- ✅ Style principal -->
   <link rel="stylesheet" href="/app.css" />
+
+  <!-- ✅ Leaflet (carte interactive) -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
 </head>
+
 <body>
+
+  <!-- ✅ En-tête -->
   <div class="hero">
     <div class="hero-inner">
       <img class="logo" src="/logo.png" alt="Logo Krimo Météo Algérie">
+
       <div class="titleblock">
         <h1>Krimo Météo Algérie</h1>
-        <p>Alertes météo — mise à jour automatique</p>
+        <p>Alertes météo – mise à jour automatique</p>
       </div>
     </div>
   </div>
 
+  <!-- ✅ Bloc principal -->
   <div class="wrap">
     <div class="card">
+
+      <!-- Badge + date -->
       <div class="row">
         <div id="badge" class="badge none">✅ Aucune alerte</div>
-        <small>Dernière mise à jour : <span id="updatedAt">—</span></small>
+        <small>
+          Dernière mise à jour :
+          <span id="updatedAt">—</span>
+        </small>
       </div>
 
-      <h2 id="title" style="margin:14px 0 6px;">Aucune alerte</h2>
+      <!-- ✅ Titre alerte -->
+      <h2 id="title" style="margin:14px 0 6px;">
+        Aucune alerte
+      </h2>
 
-      <p id="region" style="font-weight:800; margin:10px 0 0 0;"></p>
+      <!-- ✅ Wilaya -->
+      <p id="region" style="font-weight:800; margin:10px 0 0;"></p>
+
+      <!-- ✅ Carte interactive -->
       <div id="map" style="margin-top:15px;"></div>
 
+      <!-- ✅ Message -->
       <p id="message" class="muted" style="margin-top:10px;"></p>
 
-      <!-- ✅ Boutons partage -->
+      <!-- ✅ Boutons Facebook -->
       <div style="margin-top:15px; display:flex; gap:10px; flex-wrap:wrap;">
         <button id="shareFbBtn">Partager sur Facebook</button>
         <button id="copyLinkBtn" class="secondary">Copier le lien</button>
       </div>
 
+      <!-- Astuce -->
       <div class="muted" style="margin-top:14px; font-size:13px;">
         Astuce Facebook : partagez ce lien dans un post épinglé pour que tout le monde voie l’alerte en direct.
       </div>
+
     </div>
   </div>
 
+  <!-- ✅ Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- ✅ Ton script -->
   <script src="/app.js"></script>
+
 </body>
 </html>
