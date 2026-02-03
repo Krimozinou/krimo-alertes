@@ -22,7 +22,7 @@ async function refresh() {
       "⚠️ Alerte";
   }
 
-  title.textContent = data.title || (data.active ? "ALERTE MÉTÉO" : "Aucune alerte");
+  title.textContent = data.active ? (data.title || "ALERTE MÉTÉO") : "Aucune alerte";
   message.textContent = data.message || "";
 
   // ✅ Afficher la région
