@@ -6,36 +6,32 @@
   <title>Panneau Admin - Krimo Alertes</title>
   <link rel="stylesheet" href="/app.css" />
 </head>
-
 <body>
 
   <!-- ✅ LOGIN -->
-  <div id="loginBox" class="card" style="max-width:680px;margin:30px auto;padding:20px;">
-    <h1 style="margin:0 0 12px;">Panneau Admin</h1>
+  <div id="loginBox" class="card" style="max-width: 680px; margin: 30px auto; padding: 20px;">
+    <h1 style="margin:0 0 12px 0;">Panneau Admin</h1>
 
-    <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <input id="username" placeholder="Nom d'utilisateur" style="flex:1;min-width:200px;" />
-      <input id="password" type="password" placeholder="Mot de passe" style="flex:1;min-width:200px;" />
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <input id="username" placeholder="Nom d'utilisateur" style="flex:1; min-width:200px;" />
+      <input id="password" type="password" placeholder="Mot de passe" style="flex:1; min-width:200px;" />
       <button id="loginBtn">Connexion</button>
     </div>
 
-    <div id="loginMsg" style="margin-top:10px;color:#b00020;"></div>
+    <div id="loginMsg" style="margin-top:10px; color:#b00020;"></div>
   </div>
 
-  <!-- ✅ PANEL (CACHE AU DÉBUT) -->
-  <div id="panel" class="card" style="display:none;max-width:980px;margin:30px auto;padding:20px;">
-
-    <div style="display:flex;justify-content:space-between;align-items:center;">
+  <!-- ✅ PANEL -->
+  <div id="panel" class="card" style="display:none; max-width: 980px; margin: 30px auto; padding: 20px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
       <h1 style="margin:0;">Panneau Admin</h1>
       <button id="logoutBtn">Déconnexion</button>
     </div>
 
-    <!-- ✅ Niveau + Wilaya -->
-    <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-
+    <div style="margin-top:14px; display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
       <!-- Niveau -->
       <div>
-        <label>Niveau d'alerte</label>
+        <label style="display:block; margin-bottom:6px;">Niveau</label>
         <select id="level" style="width:100%;">
           <option value="none">Aucune alerte</option>
           <option value="yellow">Jaune (Niveau 01)</option>
@@ -44,127 +40,135 @@
         </select>
       </div>
 
-      <!-- Wilaya -->
+      <!-- Recherche -->
       <div>
-        <label>Wilaya concernée</label>
-        <select id="region" style="width:100%;">
-
-          <!-- ✅ Wilayas officielles (58) -->
-          <option value="Adrar">Adrar</option>
-          <option value="Chlef">Chlef</option>
-          <option value="Laghouat">Laghouat</option>
-          <option value="Oum El Bouaghi">Oum El Bouaghi</option>
-          <option value="Batna">Batna</option>
-          <option value="Bejaia">Béjaïa</option>
-          <option value="Biskra">Biskra</option>
-          <option value="Bechar">Béchar</option>
-          <option value="Blida">Blida</option>
-          <option value="Bouira">Bouira</option>
-          <option value="Tamanrasset">Tamanrasset</option>
-          <option value="Tebessa">Tébessa</option>
-          <option value="Tlemcen">Tlemcen</option>
-          <option value="Tiaret">Tiaret</option>
-          <option value="Tizi Ouzou">Tizi Ouzou</option>
-          <option value="Alger">Alger</option>
-          <option value="Djelfa">Djelfa</option>
-          <option value="Jijel">Jijel</option>
-          <option value="Setif">Sétif</option>
-          <option value="Saida">Saïda</option>
-          <option value="Skikda">Skikda</option>
-          <option value="Sidi Bel Abbes">Sidi Bel Abbès</option>
-          <option value="Annaba">Annaba</option>
-          <option value="Guelma">Guelma</option>
-          <option value="Constantine">Constantine</option>
-          <option value="Medea">Médéa</option>
-          <option value="Mostaganem">Mostaganem</option>
-          <option value="Msila">M’Sila</option>
-          <option value="Mascara">Mascara</option>
-          <option value="Ouargla">Ouargla</option>
-          <option value="Oran">Oran</option>
-          <option value="El Bayadh">El Bayadh</option>
-          <option value="Illizi">Illizi</option>
-          <option value="Bordj Bou Arreridj">Bordj Bou Arréridj</option>
-          <option value="Boumerdes">Boumerdès</option>
-          <option value="El Tarf">El Tarf</option>
-          <option value="Tindouf">Tindouf</option>
-          <option value="Tissemsilt">Tissemsilt</option>
-          <option value="El Oued">El Oued</option>
-          <option value="Khenchela">Khenchela</option>
-          <option value="Souk Ahras">Souk Ahras</option>
-          <option value="Tipaza">Tipaza</option>
-          <option value="Mila">Mila</option>
-          <option value="Ain Defla">Aïn Defla</option>
-          <option value="Naama">Naâma</option>
-          <option value="Ain Temouchent">Aïn Témouchent</option>
-          <option value="Ghardaia">Ghardaïa</option>
-          <option value="Relizane">Relizane</option>
-
-          <!-- ✅ Nouvelles Wilayas officielles (48 → 58) -->
-          <option value="Timimoun">Timimoun</option>
-          <option value="Bordj Badji Mokhtar">Bordj Badji Mokhtar</option>
-          <option value="Ouled Djellal">Ouled Djellal</option>
-          <option value="Beni Abbes">Béni Abbès</option>
-          <option value="In Salah">In Salah</option>
-          <option value="In Guezzam">In Guezzam</option>
-          <option value="Touggourt">Touggourt</option>
-          <option value="Djanet">Djanet</option>
-          <option value="El Meghaier">El Meghaier</option>
-          <option value="El Meniaa">El Meniaa</option>
-
-          <!-- ✅ +11 Zones Krimo (59 → 69) -->
-          <option value="Aflou">Aflou</option>
-          <option value="Brikcha (Bir El Ater)">Brikcha (Bir El Ater)</option>
-          <option value="El Qantara">El Qantara</option>
-          <option value="Bir El Ater">Bir El Ater</option>
-          <option value="El Aricha">El Aricha</option>
-          <option value="Ksar Chelala">Ksar Chelala</option>
-          <option value="Ain Oussera">Aïn Oussera</option>
-          <option value="Msaad">M’saâd</option>
-          <option value="Ksar El Boukhari">Ksar El Boukhari</option>
-          <option value="Boussaada">Boussaâda</option>
-          <option value="El Abiodh Sidi Cheikh">El Abiodh Sidi Cheikh</option>
-
-        </select>
+        <label style="display:block; margin-bottom:6px;">Rechercher une wilaya</label>
+        <input id="zoneSearch" placeholder="Tape un nom (ex: Chlef, Alger...)" style="width:100%;" />
       </div>
-    </div>
 
-    <!-- ✅ Dates -->
-    <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <!-- Début -->
       <div>
-        <label>Début (optionnel)</label>
+        <label style="display:block; margin-bottom:6px;">Début (optionnel)</label>
         <input id="startAt" type="datetime-local" style="width:100%;" />
       </div>
 
+      <!-- Fin -->
       <div>
-        <label>Fin (optionnel)</label>
+        <label style="display:block; margin-bottom:6px;">Fin (optionnel)</label>
         <input id="endAt" type="datetime-local" style="width:100%;" />
       </div>
     </div>
 
-    <!-- ✅ Titre -->
+    <!-- ✅ Multi-wilayas -->
+    <div style="margin-top:12px;">
+      <label style="display:block; margin-bottom:6px;">Wilayas concernées (tu peux en choisir plusieurs)</label>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+        <button id="selectAllBtn" type="button">Tout sélectionner</button>
+        <button id="clearAllBtn" type="button" style="background:#e9eef6;color:#111;">Tout enlever</button>
+      </div>
+
+      <select id="zones" multiple size="12" style="width:100%; padding:10px;">
+        <!-- ✅ 69 zones -->
+        <option>Adrar</option>
+        <option>Chlef</option>
+        <option>Laghouat</option>
+        <option>Oum El Bouaghi</option>
+        <option>Batna</option>
+        <option>Béjaïa</option>
+        <option>Biskra</option>
+        <option>Béchar</option>
+        <option>Blida</option>
+        <option>Bouira</option>
+        <option>Tamanrasset</option>
+        <option>Tébessa</option>
+        <option>Tlemcen</option>
+        <option>Tiaret</option>
+        <option>Tizi Ouzou</option>
+        <option>Alger</option>
+        <option>Djelfa</option>
+        <option>Jijel</option>
+        <option>Sétif</option>
+        <option>Saïda</option>
+        <option>Skikda</option>
+        <option>Sidi Bel Abbès</option>
+        <option>Annaba</option>
+        <option>Guelma</option>
+        <option>Constantine</option>
+        <option>Médéa</option>
+        <option>Mostaganem</option>
+        <option>M’Sila</option>
+        <option>Mascara</option>
+        <option>Ouargla</option>
+        <option>Oran</option>
+        <option>El Bayadh</option>
+        <option>Illizi</option>
+        <option>Bordj Bou Arréridj</option>
+        <option>Boumerdès</option>
+        <option>El Tarf</option>
+        <option>Tindouf</option>
+        <option>Tissemsilt</option>
+        <option>El Oued</option>
+        <option>Khenchela</option>
+        <option>Souk Ahras</option>
+        <option>Tipaza</option>
+        <option>Mila</option>
+        <option>Aïn Defla</option>
+        <option>Naâma</option>
+        <option>Aïn Témouchent</option>
+        <option>Ghardaïa</option>
+        <option>Relizane</option>
+        <option>Timimoun</option>
+        <option>Bordj Badji Mokhtar</option>
+        <option>Ouled Djellal</option>
+        <option>Béni Abbès</option>
+        <option>In Salah</option>
+        <option>In Guezzam</option>
+        <option>Touggourt</option>
+        <option>Djanet</option>
+        <option>El Meghaier</option>
+        <option>El Meniaa</option>
+
+        <!-- +11 Krimo -->
+        <option>Aflou</option>
+        <option>Brikcha (Bir El Ater)</option>
+        <option>El-Qantara</option>
+        <option>Bir El Ater</option>
+        <option>El Aricha</option>
+        <option>Ksar Chelala</option>
+        <option>Aïn Oussera</option>
+        <option>M’saâd</option>
+        <option>Ksar El Boukhari</option>
+        <option>Boussaâda</option>
+        <option>El Abiodh Sidi Cheikh</option>
+      </select>
+
+      <small style="display:block;margin-top:8px;opacity:.75;">
+        Astuce : sur téléphone, tu peux sélectionner plusieurs wilayas en cliquant une par une.
+      </small>
+    </div>
+
+    <!-- Titre -->
     <div style="margin-top:12px;">
       <input id="title" placeholder="Titre (ex: PLUIES DILUVIENNES)" style="width:100%;" />
     </div>
 
-    <!-- ✅ Message -->
+    <!-- Message -->
     <div style="margin-top:10px;">
-      <textarea id="message" placeholder="Message (ex: Attention risque inondation...)" style="width:100%;min-height:120px;"></textarea>
+      <textarea id="message" placeholder="Message (ex: Attention, risque inondation...)" style="width:100%; min-height:120px;"></textarea>
     </div>
 
-    <!-- ✅ Boutons -->
-    <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+    <div style="margin-top:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
       <button id="saveBtn">Publier l’alerte</button>
-      <button id="disableBtn" style="background:#e9eef6;color:#111;">Désactiver</button>
+      <button id="disableBtn" style="background:#e9eef6; color:#111;">Désactiver</button>
       <div id="saveMsg" style="font-weight:600;"></div>
     </div>
 
     <div style="margin-top:12px;">
       Page publique : <a href="/" target="_blank">/</a> — Admin : <a href="/admin" target="_blank">/admin</a>
     </div>
-
   </div>
 
   <script src="/admin.js"></script>
-
 </body>
 </html>
