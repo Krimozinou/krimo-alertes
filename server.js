@@ -13,6 +13,9 @@ app.use(cookieParser());
 app.set("trust proxy", 1);
 
 // ✅ Static files
+// 1) on sert d'abord /public (recommandé)
+// 2) puis on sert la racine (compat si tes fichiers sont à la racine)
+app.use(express.static(path.join(__dirname, "public")));
 app.use(express.static(__dirname));
 
 const DATA_PATH = path.join(__dirname, "alert.json");
@@ -24,19 +27,12 @@ function defaultAlert() {
   return {
     active: false,
     level: "none",
-
-    // ✅ Nouveau multi wilayas
     regions: [],
-
-    // ✅ Compat ancien champ
     region: "",
-
     title: "Aucune alerte",
     message: "",
-
     startAt: "",
     endAt: "",
-
     updatedAt: new Date().toISOString(),
   };
 }
@@ -51,7 +47,6 @@ function isNowBetween(startAt, endAt) {
 
   if (start && now < start) return false;
   if (end && now > end) return false;
-
   return true;
 }
 
@@ -61,7 +56,6 @@ function isNowBetween(startAt, endAt) {
 function normalizeAlert(data) {
   const merged = { ...defaultAlert(), ...data };
 
-  // ✅ si "region" string → convertir en array
   if (
     merged.region &&
     (!Array.isArray(merged.regions) || merged.regions.length === 0)
@@ -69,7 +63,6 @@ function normalizeAlert(data) {
     merged.regions = [merged.region];
   }
 
-  // ✅ remplir region avec première wilaya
   if (
     Array.isArray(merged.regions) &&
     merged.regions.length > 0 &&
@@ -79,7 +72,6 @@ function normalizeAlert(data) {
   }
 
   if (!Array.isArray(merged.regions)) merged.regions = [];
-
   return merged;
 }
 
@@ -90,14 +82,10 @@ function computeActive(data) {
   if (data.startAt || data.endAt) {
     const ok = isNowBetween(data.startAt, data.endAt);
     data.active = ok && data.level !== "none";
-
-    if (!data.active) {
-      data.level = "none";
-    }
+    if (!data.active) data.level = "none";
   } else {
     data.active = data.level !== "none";
   }
-
   return data;
 }
 
@@ -108,7 +96,6 @@ function readAlert() {
   try {
     const raw = fs.readFileSync(DATA_PATH, "utf-8");
     const data = JSON.parse(raw);
-
     return computeActive(normalizeAlert(data));
   } catch {
     return defaultAlert();
@@ -138,15 +125,17 @@ function authMiddleware(req, res, next) {
 }
 
 // ======================================
-// ✅ Pages
+// ✅ Pages (prend public si existe sinon racine)
 // ======================================
-app.get("/", (req, res) =>
-  res.sendFile(path.join(__dirname, "index.html"))
-);
+function sendPage(res, fileName) {
+  const p1 = path.join(__dirname, "public", fileName);
+  const p2 = path.join(__dirname, fileName);
+  if (fs.existsSync(p1)) return res.sendFile(p1);
+  return res.sendFile(p2);
+}
 
-app.get("/admin", (req, res) =>
-  res.sendFile(path.join(__dirname, "admin.html"))
-);
+app.get("/", (req, res) => sendPage(res, "index.html"));
+app.get("/admin", (req, res) => sendPage(res, "admin.html"));
 
 // ======================================
 // ✅ API PUBLIC
@@ -202,7 +191,6 @@ app.post("/api/alert", authMiddleware, (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    // ✅ Si aucune alerte → reset complet MAIS updatedAt reste rempli
     if (data.level === "none") {
       data.active = false;
       data.title = "Aucune alerte";
