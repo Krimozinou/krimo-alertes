@@ -4,30 +4,25 @@ async function refresh() {
 
   const badge = document.getElementById("badge");
   const title = document.getElementById("title");
-  const region = document.getElementById("region"); // on garde l'id region dans HTML
+  const region = document.getElementById("region");
   const message = document.getElementById("message");
   const updatedAt = document.getElementById("updatedAt");
 
   const level = data.level || "none";
 
+  // ✅ Badge + Blink
   badge.className = "badge " + level + (data.active ? " blink" : "");
 
-  // ✅ Wilayas (nouveau)
-  const wilayas = Array.isArray(data.wilayas) ? data.wilayas : [];
-  const wilayasTxt =
-    wilayas.length === 0
-      ? ""
-      : wilayas.length === 1
-      ? "📍 Wilaya : " + wilayas[0]
-      : "📍 Wilayas : " + wilayas.join(", ");
-
-  // Pas d’alerte
+  // ✅ Si aucune alerte
   if (!data.active || level === "none") {
     badge.textContent = "✅ Aucune alerte";
     title.textContent = "Aucune alerte";
     message.textContent = "";
-    if (region) region.textContent = "";
-  } else {
+    region.textContent = "";
+  }
+
+  // ✅ Si alerte active
+  else {
     badge.textContent =
       level === "yellow"
         ? "🟡 Vigilance Jaune"
@@ -39,9 +34,18 @@ async function refresh() {
 
     title.textContent = data.title || "ALERTE MÉTÉO";
     message.textContent = data.message || "";
-    if (region) region.textContent = wilayasTxt;
+
+    // ✅ Plusieurs wilayas affichées
+    const zones = Array.isArray(data.zones) ? data.zones : [];
+
+    if (zones.length > 0) {
+      region.textContent = "📍 Wilayas : " + zones.join(" - ");
+    } else {
+      region.textContent = "";
+    }
   }
 
+  // ✅ Date mise à jour
   updatedAt.textContent = data.updatedAt
     ? new Date(data.updatedAt).toLocaleString("fr-FR")
     : "—";
@@ -52,15 +56,18 @@ setInterval(refresh, 30000);
 
 // ✅ Bouton partager Facebook
 const shareFbBtn = document.getElementById("shareFbBtn");
-const copyLinkBtn = document.getElementById("copyLinkBtn");
-
 if (shareFbBtn) {
   shareFbBtn.addEventListener("click", () => {
     const url = encodeURIComponent(window.location.href);
-    window.open("https://www.facebook.com/sharer/sharer.php?u=" + url, "_blank");
+    window.open(
+      "https://www.facebook.com/sharer/sharer.php?u=" + url,
+      "_blank"
+    );
   });
 }
 
+// ✅ Copier le lien
+const copyLinkBtn = document.getElementById("copyLinkBtn");
 if (copyLinkBtn) {
   copyLinkBtn.addEventListener("click", async () => {
     try {
