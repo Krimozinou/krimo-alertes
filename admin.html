@@ -1,84 +1,73 @@
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin — Krimo Météo Algérie</title>
-  <link rel="stylesheet" href="/app.css" />
-</head>
-<body>
-  <div class="wrap" style="padding-top:24px;">
-    <div class="card">
-      <div class="row">
-        <h2 style="margin:0;">Panneau Admin</h2>
-        <button id="logoutBtn" class="secondary" style="display:none;">Déconnexion</button>
-      </div>
+<select id="region">
+  <option value="Adrar">Adrar</option>
+  <option value="Chlef">Chlef</option>
+  <option value="Laghouat">Laghouat</option>
+  <option value="Oum El Bouaghi">Oum El Bouaghi</option>
+  <option value="Batna">Batna</option>
+  <option value="Béjaïa">Béjaïa</option>
+  <option value="Biskra">Biskra</option>
+  <option value="Béchar">Béchar</option>
+  <option value="Blida">Blida</option>
+  <option value="Bouira">Bouira</option>
+  <option value="Tamanrasset">Tamanrasset</option>
+  <option value="Tébessa">Tébessa</option>
+  <option value="Tlemcen">Tlemcen</option>
+  <option value="Tiaret">Tiaret</option>
+  <option value="Tizi Ouzou">Tizi Ouzou</option>
+  <option value="Alger">Alger</option>
+  <option value="Djelfa">Djelfa</option>
+  <option value="Jijel">Jijel</option>
+  <option value="Sétif">Sétif</option>
+  <option value="Saïda">Saïda</option>
+  <option value="Skikda">Skikda</option>
+  <option value="Sidi Bel Abbès">Sidi Bel Abbès</option>
+  <option value="Annaba">Annaba</option>
+  <option value="Guelma">Guelma</option>
+  <option value="Constantine">Constantine</option>
+  <option value="Médéa">Médéa</option>
+  <option value="Mostaganem">Mostaganem</option>
+  <option value="M’Sila">M’Sila</option>
+  <option value="Mascara">Mascara</option>
+  <option value="Ouargla">Ouargla</option>
+  <option value="Oran">Oran</option>
+  <option value="El Bayadh">El Bayadh</option>
+  <option value="Illizi">Illizi</option>
+  <option value="Bordj Bou Arréridj">Bordj Bou Arréridj</option>
+  <option value="Boumerdès">Boumerdès</option>
+  <option value="El Tarf">El Tarf</option>
+  <option value="Tindouf">Tindouf</option>
+  <option value="Tissemsilt">Tissemsilt</option>
+  <option value="El Oued">El Oued</option>
+  <option value="Khenchela">Khenchela</option>
+  <option value="Souk Ahras">Souk Ahras</option>
+  <option value="Tipaza">Tipaza</option>
+  <option value="Mila">Mila</option>
+  <option value="Aïn Defla">Aïn Defla</option>
+  <option value="Naâma">Naâma</option>
+  <option value="Aïn Témouchent">Aïn Témouchent</option>
+  <option value="Ghardaïa">Ghardaïa</option>
+  <option value="Relizane">Relizane</option>
+  <option value="Timimoun">Timimoun</option>
+  <option value="Bordj Badji Mokhtar">Bordj Badji Mokhtar</option>
+  <option value="Ouled Djellal">Ouled Djellal</option>
+  <option value="Béni Abbès">Béni Abbès</option>
+  <option value="In Salah">In Salah</option>
+  <option value="In Guezzam">In Guezzam</option>
+  <option value="Touggourt">Touggourt</option>
+  <option value="Djanet">Djanet</option>
+  <option value="El Meghaier">El Meghaier</option>
+  <option value="El Meniaa">El Meniaa</option>
 
-      <!-- LOGIN -->
-      <div id="loginBox">
-        <p class="muted">Connexion requise.</p>
-        <div class="grid">
-          <input id="username" placeholder="Nom d’utilisateur" />
-          <input id="password" type="password" placeholder="Mot de passe" />
-        </div>
-        <div style="margin-top:12px;">
-          <button id="loginBtn">Se connecter</button>
-        </div>
-        <p id="loginMsg" class="muted" style="margin-top:10px;"></p>
-      </div>
-
-      <!-- PANEL -->
-      <div id="panel" style="display:none; margin-top:14px;">
-
-        <div class="grid">
-          <!-- Niveau -->
-          <select id="level">
-            <option value="none">Aucune alerte</option>
-            <option value="yellow">Jaune (Niveau 01)</option>
-            <option value="orange">Orange (Niveau 02)</option>
-            <option value="red">Rouge (Niveau 03)</option>
-          </select>
-
-          <!-- Région -->
-          <select id="region">
-            <option value="OUEST">OUEST</option>
-            <option value="CENTRE-OUEST">CENTRE-OUEST</option>
-            <option value="CENTRE">CENTRE</option>
-            <option value="CENTRE-EST">CENTRE-EST</option>
-            <option value="EST">EST</option>
-          </select>
-        </div>
-
-        <div class="grid" style="margin-top:12px;">
-          <!-- Tranche horaire -->
-          <div>
-            <div class="muted" style="font-size:13px; margin-bottom:6px;">Début (optionnel)</div>
-            <input id="startAt" type="datetime-local" />
-          </div>
-
-          <div>
-            <div class="muted" style="font-size:13px; margin-bottom:6px;">Fin (optionnel)</div>
-            <input id="endAt" type="datetime-local" />
-          </div>
-        </div>
-
-        <input id="title" placeholder="Titre (ex: VIGILANCE ORANGE)" style="width:100%; margin-top:12px;" />
-
-        <textarea id="message" rows="4" placeholder="Message (ex: Soyez très vigilant…)" style="width:100%; margin-top:12px;"></textarea>
-
-        <div class="row" style="margin-top:12px; gap:10px;">
-          <button id="saveBtn">Publier l’alerte</button>
-          <button id="disableBtn" class="secondary">Désactiver</button>
-          <span class="muted" id="saveMsg"></span>
-        </div>
-
-        <p class="muted" style="margin-top:14px; font-size:13px;">
-          Page publique : <a href="/" target="_blank" rel="noreferrer">/</a>
-        </p>
-      </div>
-    </div>
-  </div>
-
-  <script src="/admin.js"></script>
-</body>
-</html>
+  <!-- ✅ +11 zones Krimo -->
+  <option value="Aflou">Aflou</option>
+  <option value="Brikcha">Brikcha</option>
+  <option value="El-Qantara">El-Qantara</option>
+  <option value="Bir El Ater">Bir El Ater</option>
+  <option value="El Aricha">El Aricha</option>
+  <option value="Ksar Chelala">Ksar Chelala</option>
+  <option value="Aïn Oussera">Aïn Oussera</option>
+  <option value="M’saâd">M’saâd</option>
+  <option value="Ksar El Boukhari">Ksar El Boukhari</option>
+  <option value="Boussaâda">Boussaâda</option>
+  <option value="El Abiodh Sidi Cheikh">El Abiodh Sidi Cheikh</option>
+</select>
