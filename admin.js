@@ -4,70 +4,47 @@ const loginMsg = document.getElementById("loginMsg");
 const saveMsg = document.getElementById("saveMsg");
 const logoutBtn = document.getElementById("logoutBtn");
 
-function toLocalDatetimeValue(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  // datetime-local attend "YYYY-MM-DDTHH:mm"
-  const pad = (n) => String(n).padStart(2, "0");
-  return (
-    d.getFullYear() +
-    "-" +
-    pad(d.getMonth() + 1) +
-    "-" +
-    pad(d.getDate()) +
-    "T" +
-    pad(d.getHours()) +
-    ":" +
-    pad(d.getMinutes())
-  );
-}
-
-function fromLocalDatetimeValue(value) {
-  if (!value) return "";
-  // On convertit en ISO pour le serveur
-  return new Date(value).toISOString();
-}
-
 async function loadCurrent() {
   const r = await fetch("/api/alert", { cache: "no-store" });
   const data = await r.json();
 
   document.getElementById("level").value = data.level || "none";
-  document.getElementById("region").value = data.region || "Adrar";
   document.getElementById("title").value = data.title || "";
   document.getElementById("message").value = data.message || "";
-  document.getElementById("startAt").value = toLocalDatetimeValue(data.startAt);
-  document.getElementById("endAt").value = toLocalDatetimeValue(data.endAt);
+
+  document.getElementById("startAt").value = data.startAt ? data.startAt.slice(0,16) : "";
+  document.getElementById("endAt").value = data.endAt ? data.endAt.slice(0,16) : "";
+
+  // ✅ zones (multi)
+  const zonesSel = document.getElementById("zones");
+  const zones = Array.isArray(data.zones) ? data.zones : (data.region ? [data.region] : []);
+
+  for (const opt of zonesSel.options) {
+    opt.selected = zones.includes(opt.value);
+  }
 }
 
 document.getElementById("loginBtn").addEventListener("click", async () => {
   loginMsg.textContent = "";
-
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value;
 
-  try {
-    const res = await fetch("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
+  const res = await fetch("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password })
+  });
 
-    const out = await res.json().catch(() => ({}));
-
-    if (!res.ok || !out.ok) {
-      loginMsg.textContent = out.error || "Erreur de connexion";
-      return;
-    }
-
-    loginBox.style.display = "none";
-    panel.style.display = "block";
-    logoutBtn.style.display = "inline-block";
-
-    await loadCurrent();
-  } catch (e) {
-    loginMsg.textContent = "Erreur réseau";
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok || !out.ok) {
+    loginMsg.textContent = out.error || "Erreur de connexion";
+    return;
   }
+
+  loginBox.style.display = "none";
+  panel.style.display = "block";
+  logoutBtn.style.display = "inline-block";
+  await loadCurrent();
 });
 
 logoutBtn.addEventListener("click", async () => {
@@ -75,50 +52,50 @@ logoutBtn.addEventListener("click", async () => {
   location.reload();
 });
 
+// ✅ Publier
 document.getElementById("saveBtn").addEventListener("click", async () => {
   saveMsg.textContent = "Enregistrement...";
   saveMsg.style.color = "#111";
 
   const level = document.getElementById("level").value;
-  const region = document.getElementById("region").value;
-  const titleInput = document.getElementById("title").value.trim();
+  const title = document.getElementById("title").value.trim();
   const message = document.getElementById("message").value.trim();
-  const startAt = fromLocalDatetimeValue(document.getElementById("startAt").value);
-  const endAt = fromLocalDatetimeValue(document.getElementById("endAt").value);
+
+  const startAt = document.getElementById("startAt").value;
+  const endAt = document.getElementById("endAt").value;
+
+  // ✅ multi zones
+  const zonesSel = document.getElementById("zones");
+  const zones = Array.from(zonesSel.selectedOptions).map(o => o.value);
 
   const payload = {
     level,
     active: level !== "none",
-    region,
-    title: titleInput || (level === "none" ? "Aucune alerte" : "ALERTE MÉTÉO"),
+    zones,
+    title: title || (level === "none" ? "Aucune alerte" : "ALERTE MÉTÉO"),
     message,
-    startAt,
-    endAt,
+    startAt: startAt ? new Date(startAt).toISOString() : "",
+    endAt: endAt ? new Date(endAt).toISOString() : ""
   };
 
-  try {
-    const res = await fetch("/api/alert", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+  const res = await fetch("/api/alert", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
 
-    const out = await res.json().catch(() => ({}));
-
-    if (!res.ok || !out.ok) {
-      saveMsg.textContent = out.error || "Erreur";
-      saveMsg.style.color = "#b00020";
-      return;
-    }
-
-    saveMsg.textContent = "✅ Publiée";
-    saveMsg.style.color = "#0a7a2f";
-  } catch (e) {
-    saveMsg.textContent = "Erreur réseau";
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok || !out.ok) {
+    saveMsg.textContent = out.error || "Erreur";
     saveMsg.style.color = "#b00020";
+    return;
   }
+
+  saveMsg.textContent = "Publié ✅";
+  saveMsg.style.color = "#1b7f2a";
 });
 
+// ✅ Désactiver
 document.getElementById("disableBtn").addEventListener("click", async () => {
   saveMsg.textContent = "Désactivation...";
   saveMsg.style.color = "#111";
@@ -126,34 +103,50 @@ document.getElementById("disableBtn").addEventListener("click", async () => {
   const payload = {
     active: false,
     level: "none",
-    region: document.getElementById("region").value || "Adrar",
+    zones: [],
     title: "Aucune alerte",
     message: "",
     startAt: "",
-    endAt: "",
+    endAt: ""
   };
 
-  try {
-    const res = await fetch("/api/alert", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+  const res = await fetch("/api/alert", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
 
-    const out = await res.json().catch(() => ({}));
-
-    if (!res.ok || !out.ok) {
-      saveMsg.textContent = out.error || "Erreur";
-      saveMsg.style.color = "#b00020";
-      return;
-    }
-
-    saveMsg.textContent = "✅ Désactivée";
-    saveMsg.style.color = "#0a7a2f";
-
-    await loadCurrent();
-  } catch (e) {
-    saveMsg.textContent = "Erreur réseau";
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok || !out.ok) {
+    saveMsg.textContent = out.error || "Erreur";
     saveMsg.style.color = "#b00020";
+    return;
   }
+
+  saveMsg.textContent = "Désactivé ✅";
+  saveMsg.style.color = "#1b7f2a";
+  await loadCurrent();
+});
+
+// ✅ Filtre recherche dans la liste
+const zoneSearch = document.getElementById("zoneSearch");
+zoneSearch.addEventListener("input", () => {
+  const q = zoneSearch.value.trim().toLowerCase();
+  const zonesSel = document.getElementById("zones");
+  for (const opt of zonesSel.options) {
+    opt.style.display = opt.value.toLowerCase().includes(q) ? "" : "none";
+  }
+});
+
+// ✅ Tout sélectionner / Tout enlever
+document.getElementById("selectAllBtn").addEventListener("click", () => {
+  const zonesSel = document.getElementById("zones");
+  for (const opt of zonesSel.options) {
+    if (opt.style.display !== "none") opt.selected = true;
+  }
+});
+
+document.getElementById("clearAllBtn").addEventListener("click", () => {
+  const zonesSel = document.getElementById("zones");
+  for (const opt of zonesSel.options) opt.selected = false;
 });
