@@ -3,12 +3,13 @@
 // ✅ Multi-wilayas (regions / zones / wilayas / region)
 // ✅ Carte Leaflet (points depuis /main.json)
 // ✅ Zoom auto sur wilayas sélectionnées
-// ✅ Icône pluie/orage/vent dans le titre
+// ✅ Icône météo (pluie / orage / vent) dans le titre
+// ✅ Debug simple : affiche "points X/Y"
 // ===============================
 
 let map;
-let markersLayer = null;
 let wilayasIndex = null; // Map(normalizedName -> {name, lat, lon})
+let markers = [];        // tableau des markers ajoutés
 
 function normalizeName(s) {
   return (s || "")
@@ -35,19 +36,14 @@ function badgeClass(level, active) {
   return "badge " + (level || "none") + (active ? " blink" : "");
 }
 
-// ✅ Détecter une icône à mettre devant le titre
 function detectHazardIcon(data) {
   const t = normalizeName(data?.title || "");
   const m = normalizeName(data?.message || "");
 
-  // orage
   if (t.includes("orage") || m.includes("orage")) return "⛈️";
-  // vent
   if (t.includes("vent") || m.includes("vent") || t.includes("tempete") || m.includes("tempete")) return "🌬️";
-  // pluie / inondation
   if (t.includes("pluie") || m.includes("pluie") || t.includes("inond") || m.includes("inond")) return "🌧️";
 
-  // sinon selon niveau
   if (data?.level === "red") return "🚨";
   if (data?.level === "orange") return "⚠️";
   if (data?.level === "yellow") return "🟡";
@@ -66,9 +62,6 @@ function initMapIfNeeded() {
     attribution: "© OpenStreetMap",
   }).addTo(map);
 
-  // ✅ layer des points
-  markersLayer = L.layerGroup().addTo(map);
-
   map.setView([28.0, 2.5], 5);
   setTimeout(() => map.invalidateSize(), 300);
 }
@@ -82,7 +75,7 @@ async function loadWilayasIndex() {
   const data = await res.json();
   const list = Array.isArray(data.wilayas) ? data.wilayas : [];
 
-  wilayasIndex = new Map();
+  const idx = new Map();
 
   for (const w of list) {
     const n = w.name || "";
@@ -90,27 +83,26 @@ async function loadWilayasIndex() {
     const lon = Number(w.longitude);
     if (!n || !isFinite(lat) || !isFinite(lon)) continue;
 
-    wilayasIndex.set(normalizeName(n), { name: n, lat, lon });
+    idx.set(normalizeName(n), { name: n, lat, lon });
 
-    // ✅ alias Alger / Algiers
-    if (normalizeName(n) === "algiers") wilayasIndex.set("alger", { name: n, lat, lon });
-    if (normalizeName(n) === "alger") wilayasIndex.set("algiers", { name: n, lat, lon });
+    // ✅ alias Alger/Algiers
+    if (normalizeName(n) === "algiers") idx.set("alger", { name: n, lat, lon });
+    if (normalizeName(n) === "alger") idx.set("algiers", { name: n, lat, lon });
   }
 
+  wilayasIndex = idx;
   return wilayasIndex;
 }
 
 function clearMarkers() {
-  try {
-    if (markersLayer) markersLayer.clearLayers();
-  } catch {}
+  for (const m of markers) {
+    try { map.removeLayer(m); } catch {}
+  }
+  markers = [];
 }
 
 function addMarkersFor(wilayas, level) {
-  if (!map || !wilayasIndex) return;
-
-  // ✅ si layer cassée, on la recrée
-  if (!markersLayer) markersLayer = L.layerGroup().addTo(map);
+  if (!map || !wilayasIndex) return { found: 0, total: wilayas.length };
 
   clearMarkers();
 
@@ -121,10 +113,13 @@ function addMarkersFor(wilayas, level) {
     "#444";
 
   const bounds = [];
+  let foundCount = 0;
 
   for (const name of wilayas) {
     const found = wilayasIndex.get(normalizeName(name));
     if (!found) continue;
+
+    foundCount++;
 
     const circle = L.circleMarker([found.lat, found.lon], {
       radius: 10,
@@ -132,28 +127,21 @@ function addMarkersFor(wilayas, level) {
       fillColor: color,
       fillOpacity: 0.9,
       weight: 2
-    });
-
-    // ✅ IMPORTANT : on ajoute à la layer, sinon direct à la map
-    try {
-      circle.addTo(markersLayer);
-    } catch {
-      circle.addTo(map);
-    }
+    }).addTo(map);
 
     circle.bindPopup("📍 " + name);
+    markers.push(circle);
     bounds.push([found.lat, found.lon]);
   }
 
-  if (bounds.length === 1) {
-    map.setView(bounds[0], 9);
-  } else if (bounds.length > 1) {
-    map.fitBounds(bounds, { padding: [30, 30] });
-  } else {
-    map.setView([28.0, 2.5], 5);
-  }
+  // zoom
+  if (bounds.length === 1) map.setView(bounds[0], 9);
+  else if (bounds.length > 1) map.fitBounds(bounds, { padding: [30, 30] });
+  else map.setView([28.0, 2.5], 5);
 
   setTimeout(() => map.invalidateSize(), 150);
+
+  return { found: foundCount, total: wilayas.length };
 }
 
 async function refresh() {
@@ -177,7 +165,7 @@ async function refresh() {
 
   if (badge) badge.className = badgeClass(level, active);
 
-  // ✅ Date à droite
+  // ✅ heure en haut à droite
   if (updatedAt) {
     updatedAt.textContent = data.updatedAt
       ? new Date(data.updatedAt).toLocaleString("fr-FR")
@@ -191,30 +179,34 @@ async function refresh() {
     if (title) title.textContent = "Aucune alerte";
     if (message) message.textContent = "";
     if (region) region.textContent = "";
-
     clearMarkers();
     return;
   }
 
-  // ✅ icône dans le titre
   const ico = detectHazardIcon(data);
-  if (title) title.textContent = (ico ? (ico + " ") : "") + (data.title || "ALERTE MÉTÉO");
+  if (title) title.textContent = (ico ? ico + " " : "") + (data.title || "ALERTE MÉTÉO");
 
   if (badge) badge.textContent = badgeText(level);
   if (message) message.textContent = data.message || "";
-  if (region) region.textContent = wilayas.length ? "📍 Wilayas : " + wilayas.join(" - ") : "";
 
   try {
-    wilayasIndex = await loadWilayasIndex();
-    addMarkersFor(wilayas, level);
+    await loadWilayasIndex();
+    const r = addMarkersFor(wilayas, level);
+
+    // ✅ affiche le debug points trouvés
+    if (region) {
+      region.textContent =
+        (wilayas.length ? "📍 Wilayas : " + wilayas.join(" - ") : "") +
+        ` (points: ${r.found}/${r.total})`;
+    }
   } catch (e) {
-    // si main.json ne charge pas, au moins on ne casse pas la page
     clearMarkers();
-    console.error("Erreur main.json / points:", e);
+    if (region) region.textContent = "⚠️ Erreur chargement main.json / points";
+    console.error(e);
   }
 }
 
-// Boutons
+// boutons
 const shareFbBtn = document.getElementById("shareFbBtn");
 const copyLinkBtn = document.getElementById("copyLinkBtn");
 
