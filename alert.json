@@ -4,5 +4,7 @@
   "region": "Aucune",
   "title": "Aucune alerte",
   "message": "",
+  "startAt": "",
+  "endAt": "",
   "updatedAt": ""
 }
