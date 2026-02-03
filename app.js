@@ -1,18 +1,16 @@
 // ===============================
-// Krimo Alertes — app.js (COMPLET)
+// Krimo Alertes — app.js (STABLE + DEBUG)
 // ✅ Multi-wilayas (regions / zones / wilayas / region)
-// ✅ Carte Leaflet (points depuis /main.json)
-// ✅ Zoom auto sur wilayas sélectionnées
-// ✅ Fix Alger (Alger / Algiers)
-// ✅ Icône météo (pluie / orage / vent) SUR LES POINTS + dans le titre
+// ✅ Leaflet markers (visibles)
+// ✅ Cache-busting main.json (stop cache Render)
+// ✅ Debug sur page: "Points X/Y" + wilayas manquantes
+// ✅ Icône météo (pluie / orage / vent) dans le titre
 // ===============================
 
 let map;
 let markersLayer;
-
 let wilayasIndex = null; // Map(normalizedName -> {name, lat, lon})
 
-// --------- Helpers ----------
 function normalizeName(s) {
   return (s || "")
     .toString()
@@ -22,7 +20,8 @@ function normalizeName(s) {
     .replace(/[\u0300-\u036f]/g, "") // accents
     .replace(/[’']/g, " ")
     .replace(/-/g, " ")
-    .replace(/\s+/g, " ");
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function badgeText(level) {
@@ -30,7 +29,7 @@ function badgeText(level) {
     level === "yellow" ? "🟡 Vigilance Jaune" :
     level === "orange" ? "🟠 Vigilance Orange" :
     level === "red" ? "🔴 Vigilance Rouge" :
-    "⚠️ Alerte"
+    "✅ Aucune alerte"
   );
 }
 
@@ -38,45 +37,29 @@ function badgeClass(level, active) {
   return "badge " + (level || "none") + (active ? " blink" : "");
 }
 
-// Détecter l’icône météo selon titre/message
-function hazardEmoji(data) {
+function detectHazardIcon(data) {
   const t = normalizeName(data?.title || "");
   const m = normalizeName(data?.message || "");
 
-  // Orages
-  if (t.includes("orage") || m.includes("orage") || t.includes("orag") || m.includes("orag")) return "⛈️";
-  // Vent / tempête
+  if (t.includes("orage") || m.includes("orage")) return "⛈️";
   if (t.includes("vent") || m.includes("vent") || t.includes("tempete") || m.includes("tempete")) return "💨";
-  // Pluie / inondations
   if (t.includes("pluie") || m.includes("pluie") || t.includes("inond") || m.includes("inond")) return "🌧️";
-
-  // Par défaut selon niveau
-  if (data?.level === "red") return "🚨";
-  if (data?.level === "orange") return "⚠️";
-  if (data?.level === "yellow") return "🟡";
   return "";
-}
-
-function levelColor(level) {
-  return (
-    level === "red" ? "#e53935" :
-    level === "orange" ? "#fb8c00" :
-    level === "yellow" ? "#fdd835" :
-    "#444"
-  );
 }
 
 // --------- Init carte ----------
 function initMapIfNeeded() {
   const mapDiv = document.getElementById("map");
   if (!mapDiv) return;
+  if (map) return;
 
-  if (map) return; // déjà init
+  if (typeof L === "undefined") {
+    const dbg = document.getElementById("debug");
+    if (dbg) dbg.textContent = "⚠️ Leaflet non chargé (L undefined)";
+    return;
+  }
 
-  map = L.map("map", {
-    zoomControl: true,
-    scrollWheelZoom: false
-  });
+  map = L.map("map", { zoomControl: true, scrollWheelZoom: false });
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 18,
@@ -85,23 +68,21 @@ function initMapIfNeeded() {
 
   markersLayer = L.layerGroup().addTo(map);
 
-  // Vue par défaut Algérie
   map.setView([28.0, 2.5], 5);
-
-  // Fix affichage (mobile)
   setTimeout(() => map.invalidateSize(), 300);
 }
 
-// --------- Charger index wilayas depuis main.json ----------
+// --------- Charger index wilayas depuis main.json (anti-cache) ----------
 async function loadWilayasIndex() {
   if (wilayasIndex) return wilayasIndex;
 
-  const res = await fetch("/main.json", { cache: "no-store" });
-  if (!res.ok) throw new Error("main.json introuvable ( /main.json )");
+  // ✅ anti-cache (Render peut servir une version ancienne)
+  const url = "main.json?v=" + Date.now();
+
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error("main.json introuvable (" + res.status + ")");
 
   const data = await res.json();
-
-  // data.wilayas = [{name, latitude, longitude, ...}]
   const list = Array.isArray(data.wilayas) ? data.wilayas : [];
 
   wilayasIndex = new Map();
@@ -112,68 +93,80 @@ async function loadWilayasIndex() {
     const lon = Number(w.longitude);
     if (!n || !isFinite(lat) || !isFinite(lon)) continue;
 
-    wilayasIndex.set(normalizeName(n), { name: n, lat, lon });
+    const key = normalizeName(n);
+    wilayasIndex.set(key, { name: n, lat, lon });
 
-    // ✅ alias spécial Alger
-    if (normalizeName(n) === "algiers") {
-      wilayasIndex.set("alger", { name: n, lat, lon });
-    }
-    if (normalizeName(n) === "alger") {
-      wilayasIndex.set("algiers", { name: n, lat, lon });
-    }
+    // ✅ alias Alger
+    if (key === "algiers") wilayasIndex.set("alger", { name: n, lat, lon });
+    if (key === "alger") wilayasIndex.set("algiers", { name: n, lat, lon });
   }
 
   return wilayasIndex;
 }
 
-// --------- Points ----------
 function clearMarkers() {
   if (markersLayer) markersLayer.clearLayers();
 }
 
-function makeEmojiMarkerIcon(emoji, color) {
-  // Icône 100% inline (pas besoin de modifier app.css)
+function makeIcon(level) {
+  // petite pastille colorée (très visible)
+  const bg =
+    level === "red" ? "#e53935" :
+    level === "orange" ? "#fb8c00" :
+    level === "yellow" ? "#fdd835" :
+    "#444";
+
   const html = `
     <div style="
-      width: 28px; height: 28px;
-      border-radius: 999px;
-      background: ${color};
-      border: 2px solid rgba(0,0,0,0.25);
-      display:flex; align-items:center; justify-content:center;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-      font-size: 16px;
-      line-height: 1;
-    ">${emoji || "📍"}</div>
+      width:16px;height:16px;border-radius:50%;
+      background:${bg};
+      border:2px solid white;
+      box-shadow:0 0 4px rgba(0,0,0,.35);
+    "></div>
   `;
 
   return L.divIcon({
+    className: "",
     html,
-    className: "", // évite les styles par défaut
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -14]
+    iconSize: [16, 16],
+    iconAnchor: [8, 8]
   });
 }
 
-function addMarkersFor(wilayas, level, emoji) {
+// --------- Placer points + debug ----------
+function addMarkersFor(wilayas, level) {
   if (!map || !markersLayer || !wilayasIndex) return;
 
   clearMarkers();
 
-  const color = levelColor(level);
+  const icon = makeIcon(level);
   const bounds = [];
+  const missing = [];
+  let foundCount = 0;
 
   for (const name of wilayas) {
     const key = normalizeName(name);
     const found = wilayasIndex.get(key);
-    if (!found) continue;
 
-    const marker = L.marker([found.lat, found.lon], {
-      icon: makeEmojiMarkerIcon(emoji, color)
-    }).addTo(markersLayer);
+    if (!found) {
+      missing.push(name);
+      continue;
+    }
 
-    marker.bindPopup(`${emoji || "📍"} ${name || found.name}`);
+    foundCount++;
+
+    const marker = L.marker([found.lat, found.lon], { icon }).addTo(markersLayer);
+    marker.bindPopup("📍 " + (name || found.name));
     bounds.push([found.lat, found.lon]);
+  }
+
+  // ✅ Debug visible sur la page (pas besoin console)
+  const dbg = document.getElementById("debug");
+  if (dbg) {
+    const base = `📌 Points trouvés : ${foundCount}/${wilayas.length}`;
+    dbg.textContent = missing.length
+      ? base + ` — ❌ Non trouvées: ${missing.join(" - ")}`
+      : base;
   }
 
   // Zoom auto
@@ -195,89 +188,66 @@ async function refresh() {
   const region = document.getElementById("region");
   const message = document.getElementById("message");
   const updatedAt = document.getElementById("updatedAt");
+  const dbg = document.getElementById("debug");
 
-  let data;
   try {
-    const res = await fetch("/api/alert", { cache: "no-store" });
-    data = await res.json();
-  } catch (e) {
-    // si api/alert ne répond pas, on évite de casser l’écran
-    if (badge) badge.className = badgeClass("none", false);
-    if (badge) badge.textContent = "⚠️ Problème réseau";
-    if (title) title.textContent = "Erreur de chargement";
-    if (message) message.textContent = "";
-    if (region) region.textContent = "";
-    if (updatedAt) updatedAt.textContent = "—";
-    return;
-  }
+    const res = await fetch("api/alert?v=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) throw new Error("api/alert " + res.status);
 
-  const level = data.level || "none";
-  const active = !!data.active;
+    const data = await res.json();
 
-  // ✅ Multi champs possibles
-  const wilayas =
-    Array.isArray(data.regions) ? data.regions :
-    Array.isArray(data.zones) ? data.zones :
-    Array.isArray(data.wilayas) ? data.wilayas :
-    (data.region ? [data.region] : []);
+    const level = data.level || "none";
+    const active = !!data.active;
 
-  // Badge
-  if (badge) badge.className = badgeClass(level, active);
+    const wilayas =
+      Array.isArray(data.regions) ? data.regions :
+      Array.isArray(data.zones) ? data.zones :
+      Array.isArray(data.wilayas) ? data.wilayas :
+      (data.region ? [data.region] : []);
 
-  const icon = hazardEmoji(data);
-
-  // Cas aucune alerte
-  if (!active || level === "none") {
-    if (badge) badge.textContent = "✅ Aucune alerte";
-    if (title) title.textContent = "Aucune alerte";
-    if (message) message.textContent = "";
-    if (region) region.textContent = "";
-
-    initMapIfNeeded();
-    try {
-      await loadWilayasIndex();
-      clearMarkers();
-    } catch {
-      // si main.json ne charge pas, on garde juste la carte sans points
-      clearMarkers();
-    }
-  } else {
+    if (badge) badge.className = badgeClass(level, active);
     if (badge) badge.textContent = badgeText(level);
 
-    const t = data.title || "ALERTE MÉTÉO";
-    if (title) title.textContent = (icon ? icon + " " : "") + t;
+    const icon = detectHazardIcon(data);
 
-    if (message) message.textContent = data.message || "";
+    if (!active || level === "none") {
+      if (title) title.textContent = (icon ? icon + " " : "") + "Aucune alerte";
+      if (message) message.textContent = "";
+      if (region) region.textContent = "";
+      if (dbg) dbg.textContent = "";
 
-    if (region) {
-      region.textContent = wilayas.length
-        ? "📍 Wilayas : " + wilayas.join(" - ")
-        : "";
-    }
-
-    // Carte + points
-    initMapIfNeeded();
-
-    try {
-      const idx = await loadWilayasIndex();
-      wilayasIndex = idx;
-      addMarkersFor(wilayas, level, icon || "📍");
-    } catch {
-      // Si main.json ne charge pas, on n’affiche pas d’erreur “agressive”
-      // on garde la carte, sans points
+      initMapIfNeeded();
       clearMarkers();
-    }
-  }
+    } else {
+      if (title) title.textContent = (icon ? icon + " " : "") + (data.title || "ALERTE MÉTÉO");
+      if (message) message.textContent = data.message || "";
 
-  // Date
-  if (updatedAt) {
-    updatedAt.textContent = data.updatedAt
-      ? new Date(data.updatedAt).toLocaleString("fr-FR")
-      : "—";
+      if (region) {
+        region.textContent = wilayas.length
+          ? "📍 Wilayas : " + wilayas.join(" - ")
+          : "";
+      }
+
+      initMapIfNeeded();
+
+      // ✅ charge main.json puis place points
+      wilayasIndex = await loadWilayasIndex();
+      addMarkersFor(wilayas, level);
+    }
+
+    if (updatedAt) {
+      updatedAt.textContent = data.updatedAt
+        ? new Date(data.updatedAt).toLocaleString("fr-FR")
+        : "—";
+    }
+  } catch (e) {
+    // ✅ message d’erreur clair (pas de disparition silencieuse)
+    if (dbg) dbg.textContent = "⚠️ Problème de chargement (api/alert ou main.json)";
+    // on ne casse pas la page
   }
 }
 
-// --------- Boutons partage ----------
+// --------- Partage ----------
 const shareFbBtn = document.getElementById("shareFbBtn");
 const copyLinkBtn = document.getElementById("copyLinkBtn");
 
@@ -300,5 +270,7 @@ if (copyLinkBtn) {
 }
 
 // --------- Start ----------
-refresh();
-setInterval(refresh, 30000);
+document.addEventListener("DOMContentLoaded", () => {
+  refresh();
+  setInterval(refresh, 30000);
+});
