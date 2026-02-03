@@ -1,22 +1,24 @@
 // ===============================
 // Krimo Alertes — app.js (COMPLET)
 // ✅ Multi-wilayas (regions / zones / wilayas / region)
-// ✅ Carte Leaflet (points depuis main.json)
-// ✅ Points rouges sur wilayas concernées + zoom auto
-// ✅ Heure "Dernière mise à jour" OK
+// ✅ Carte Leaflet (points depuis /main.json)
+// ✅ Zoom auto sur wilayas sélectionnées
+// ✅ Fix Alger (Alger / Algiers) GARANTI
 // ===============================
 
 let map;
 let markersLayer;
 
-// -------- Helpers ----------
+let wilayasIndex = null; // Map(normalizedName -> {name, lat, lon})
+
+// --------- Helpers ----------
 function normalizeName(s) {
   return (s || "")
     .toString()
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\u0300-\u036f]/g, "") // accents
     .replace(/[’']/g, " ")
     .replace(/-/g, " ")
     .replace(/\s+/g, " ");
@@ -31,16 +33,25 @@ function badgeText(level) {
   );
 }
 
-// -------- Leaflet init ----------
-function initMap() {
-  const mapDiv = document.getElementById("map");
-  if (!mapDiv || typeof L === "undefined") return;
+function badgeClass(level, active) {
+  return "badge " + (level || "none") + (active ? " blink" : "");
+}
 
-  map = L.map("map", { zoomControl: true, scrollWheelZoom: false });
+// --------- Init carte ----------
+function initMapIfNeeded() {
+  const mapDiv = document.getElementById("map");
+  if (!mapDiv) return;
+
+  if (map) return; // déjà init
+
+  map = L.map("map", {
+    zoomControl: true,
+    scrollWheelZoom: false
+  });
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 18,
-    attribution: "© OpenStreetMap",
+    attribution: "© OpenStreetMap"
   }).addTo(map);
 
   markersLayer = L.layerGroup().addTo(map);
@@ -48,135 +59,163 @@ function initMap() {
   // Vue par défaut Algérie
   map.setView([28.0, 2.5], 5);
 
-  // Fix mobile
-  setTimeout(() => map.invalidateSize(), 250);
+  // Fix affichage (mobile)
+  setTimeout(() => map.invalidateSize(), 300);
 }
 
-// -------- Charger dataset wilayas (main.json) ----------
-async function loadWilayasDataset() {
-  // IMPORTANT: ton fichier doit s'appeler "main.json" et être au même niveau que index.html
+// --------- Charger index wilayas depuis main.json ----------
+async function loadWilayasIndex() {
+  if (wilayasIndex) return wilayasIndex;
+
   const res = await fetch("/main.json", { cache: "no-store" });
-  if (!res.ok) throw new Error("main.json introuvable (vérifie qu'il est bien upload sur GitHub/Render)");
-  const json = await res.json();
+  if (!res.ok) throw new Error("main.json introuvable ( /main.json )");
 
-  // Le fichier contient { wilayas: [...] }
-  const list = Array.isArray(json.wilayas) ? json.wilayas : [];
-  return list;
+  const data = await res.json();
+
+  // data.wilayas = [{name, latitude, longitude, ...}]
+  const list = Array.isArray(data.wilayas) ? data.wilayas : [];
+
+  wilayasIndex = new Map();
+
+  for (const w of list) {
+    const n = w.name || "";
+    const lat = Number(w.latitude);
+    const lon = Number(w.longitude);
+    if (!n || !isFinite(lat) || !isFinite(lon)) continue;
+
+    wilayasIndex.set(normalizeName(n), { name: n, lat, lon });
+
+    // ✅ alias spécial Alger (au cas où)
+    if (normalizeName(n) === "algiers") {
+      wilayasIndex.set("alger", { name: "Alger", lat, lon });
+    }
+    if (normalizeName(n) === "alger") {
+      wilayasIndex.set("algiers", { name: "Algiers", lat, lon });
+    }
+  }
+
+  return wilayasIndex;
 }
 
-// -------- Afficher points sur la carte ----------
-function renderWilayasOnMap(wilayasList, selectedNames, level) {
-  if (!map || !markersLayer) return;
+// --------- Placer points ----------
+function clearMarkers() {
+  if (markersLayer) markersLayer.clearLayers();
+}
 
-  markersLayer.clearLayers();
+function addMarkersFor(wilayas, level) {
+  if (!map || !markersLayer || !wilayasIndex) return;
 
-  const selectedSet = new Set((selectedNames || []).map(normalizeName));
+  clearMarkers();
+
+  // couleur simple par niveau
+  const color =
+    level === "red" ? "#e53935" :
+    level === "orange" ? "#fb8c00" :
+    level === "yellow" ? "#fdd835" :
+    "#444";
+
   const bounds = [];
 
-  // couleur selon niveau
-  const selectedColor =
-    level === "red" ? "#e11d2e" :
-    level === "orange" ? "#f97316" :
-    level === "yellow" ? "#facc15" :
-    "#2563eb"; // bleu si juste sélection
+  for (const name of wilayas) {
+    const key = normalizeName(name);
 
-  wilayasList.forEach((w) => {
-    const name = w.name || "";
-    const lat = Number(w.latitude);
-    const lng = Number(w.longitude);
-    if (!name || !isFinite(lat) || !isFinite(lng)) return;
+    // ✅ FIX GARANTI pour Alger (même si ça ne match pas)
+    if (key === "alger" || key === "algiers") {
+      const lat = 36.7538;
+      const lon = 3.0588;
 
-    const isSelected = selectedSet.has(normalizeName(name));
+      const marker = L.circleMarker([lat, lon], {
+        radius: 9,
+        color: color,
+        fillColor: color,
+        fillOpacity: 0.85,
+        weight: 2
+      }).addTo(markersLayer);
 
-    // cercle (plus propre qu'un pin)
-    const circle = L.circleMarker([lat, lng], {
-      radius: isSelected ? 9 : 5,
-      weight: isSelected ? 3 : 1,
-      color: isSelected ? selectedColor : "#666",
-      fillColor: isSelected ? selectedColor : "#999",
-      fillOpacity: isSelected ? 0.9 : 0.5,
-    });
+      marker.bindPopup("📍 Alger");
+      bounds.push([lat, lon]);
+      continue;
+    }
 
-    circle.bindPopup(
-      `<b>${name}</b>` +
-      (isSelected ? `<br/>⚠️ Wilaya concernée` : "")
-    );
+    const found = wilayasIndex.get(key);
+    if (!found) continue;
 
-    circle.addTo(markersLayer);
+    const marker = L.circleMarker([found.lat, found.lon], {
+      radius: 9,
+      color: color,
+      fillColor: color,
+      fillOpacity: 0.85,
+      weight: 2
+    }).addTo(markersLayer);
 
-    if (isSelected) bounds.push([lat, lng]);
-  });
+    marker.bindPopup("📍 " + (name || found.name));
+    bounds.push([found.lat, found.lon]);
+  }
 
-  // Zoom auto sur wilayas sélectionnées
-  if (bounds.length > 0) {
-    map.fitBounds(bounds, { padding: [25, 25] });
+  // Zoom auto
+  if (bounds.length === 1) {
+    map.setView(bounds[0], 9);
+  } else if (bounds.length > 1) {
+    map.fitBounds(bounds, { padding: [30, 30] });
   } else {
+    // rien trouvé -> vue Algérie
     map.setView([28.0, 2.5], 5);
   }
 
-  setTimeout(() => map.invalidateSize(), 200);
+  setTimeout(() => map.invalidateSize(), 150);
 }
 
-// -------- Refresh UI ----------
+// --------- Refresh UI ----------
 async function refresh() {
   const res = await fetch("/api/alert", { cache: "no-store" });
   const data = await res.json();
 
   const badge = document.getElementById("badge");
   const title = document.getElementById("title");
-  const regionEl = document.getElementById("region");
+  const region = document.getElementById("region");
   const message = document.getElementById("message");
   const updatedAt = document.getElementById("updatedAt");
 
   const level = data.level || "none";
+  const active = !!data.active;
 
-  // badge classes
-  if (badge) badge.className = "badge " + level + (data.active ? " blink" : "");
+  // ✅ Multi champs possibles
+  const wilayas =
+    Array.isArray(data.regions) ? data.regions :
+    Array.isArray(data.zones) ? data.zones :
+    Array.isArray(data.wilayas) ? data.wilayas :
+    (data.region ? [data.region] : []);
 
-  // récupérer les wilayas depuis plusieurs champs possibles
-  let regions = [];
-  if (Array.isArray(data.regions)) regions = data.regions;
-  else if (Array.isArray(data.zones)) regions = data.zones;
-  else if (Array.isArray(data.wilayas)) regions = data.wilayas;
-  else if (data.region) regions = [data.region];
+  // Badge
+  if (badge) badge.className = badgeClass(level, active);
 
-  // afficher texte wilayas
-  const regionsText = regions.filter(Boolean).join(" - ");
-
-  // cas aucune alerte
-  if (!data.active || level === "none") {
+  // Cas aucune alerte
+  if (!active || level === "none") {
     if (badge) badge.textContent = "✅ Aucune alerte";
     if (title) title.textContent = "Aucune alerte";
     if (message) message.textContent = "";
-    if (regionEl) regionEl.textContent = "";
+    if (region) region.textContent = "";
 
-    // carte: afficher juste l'Algérie (sans sélection)
-    try {
-      const wilayasList = await loadWilayasDataset();
-      renderWilayasOnMap(wilayasList, [], "none");
-    } catch {
-      // si main.json manque, on laisse la carte vide
-    }
+    initMapIfNeeded();
+    try { await loadWilayasIndex(); } catch {}
+    clearMarkers();
   } else {
     if (badge) badge.textContent = badgeText(level);
     if (title) title.textContent = data.title || "ALERTE MÉTÉO";
     if (message) message.textContent = data.message || "";
 
-    if (regionEl) {
-      regionEl.textContent = regionsText ? ("📍 Wilayas : " + regionsText) : "";
+    if (region) {
+      region.textContent = wilayas.length
+        ? "📍 Wilayas : " + wilayas.join(" - ")
+        : "";
     }
 
-    // carte: points + sélection
-    try {
-      const wilayasList = await loadWilayasDataset();
-      renderWilayasOnMap(wilayasList, regions, level);
-    } catch (e) {
-      // si main.json introuvable, pas d'indication
-      // (tu peux voir l'erreur dans la console navigateur)
-    }
+    initMapIfNeeded();
+    wilayasIndex = await loadWilayasIndex();
+    addMarkersFor(wilayas, level);
   }
 
-  // heure (updatedAt)
+  // Date
   if (updatedAt) {
     updatedAt.textContent = data.updatedAt
       ? new Date(data.updatedAt).toLocaleString("fr-FR")
@@ -184,12 +223,7 @@ async function refresh() {
   }
 }
 
-// -------- Start ----------
-initMap();
-refresh();
-setInterval(refresh, 30000);
-
-// ✅ Bouton partager Facebook
+// --------- Boutons partage ----------
 const shareFbBtn = document.getElementById("shareFbBtn");
 const copyLinkBtn = document.getElementById("copyLinkBtn");
 
@@ -200,7 +234,6 @@ if (shareFbBtn) {
   });
 }
 
-// ✅ Copier le lien
 if (copyLinkBtn) {
   copyLinkBtn.addEventListener("click", async () => {
     try {
@@ -210,4 +243,8 @@ if (copyLinkBtn) {
       prompt("Copie manuelle :", window.location.href);
     }
   });
-    }
+}
+
+// --------- Start ----------
+refresh();
+setInterval(refresh, 30000);
