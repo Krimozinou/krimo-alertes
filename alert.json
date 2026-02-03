@@ -1,10 +1,11 @@
 {
   "active": false,
   "level": "none",
-  "wilayas": [],
+  "regions": [],
+  "region": "",
   "title": "Aucune alerte",
   "message": "",
   "startAt": "",
   "endAt": "",
-  "updatedAt": ""
+  "updatedAt": "2026-02-03T13:52:22.000Z"
 }
