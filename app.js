@@ -4,33 +4,41 @@ async function refresh() {
 
   const badge = document.getElementById("badge");
   const title = document.getElementById("title");
-  const region = document.getElementById("region");
+  const region = document.getElementById("region"); // on garde l'id "region" dans HTML, mais on affiche Zone
   const message = document.getElementById("message");
   const updatedAt = document.getElementById("updatedAt");
 
   const level = data.level || "none";
 
+  // Classe du badge + clignotement si actif
   badge.className = "badge " + level + (data.active ? " blink" : "");
 
+  // Cas : pas d’alerte
   if (!data.active || level === "none") {
     badge.textContent = "✅ Aucune alerte";
     title.textContent = "Aucune alerte";
     message.textContent = "";
-    region.textContent = "";
+    if (region) region.textContent = "";
   } else {
+    // Texte du badge
     badge.textContent =
       level === "yellow" ? "🟡 Vigilance Jaune" :
       level === "orange" ? "🟠 Vigilance Orange" :
       level === "red" ? "🔴 Vigilance Rouge" :
       "⚠️ Alerte";
 
+    // Titre & message
     title.textContent = data.title || "ALERTE MÉTÉO";
     message.textContent = data.message || "";
 
-    const r = data.region || "Aucune";
-    region.textContent = r && r !== "Aucune" ? ("📍 Région : " + r) : "";
+    // ✅ Zone/Wilaya (stockée dans data.region)
+    const z = data.region || "";
+    if (region) {
+      region.textContent = z ? ("📍 Zone : " + z) : "";
+    }
   }
 
+  // Date
   updatedAt.textContent = data.updatedAt
     ? new Date(data.updatedAt).toLocaleString("fr-FR")
     : "—";
