@@ -37,16 +37,20 @@ document.getElementById("loginBtn").addEventListener("click", async () => {
 
 document.getElementById("saveBtn").addEventListener("click", async () => {
   saveMsg.textContent = "Enregistrement...";
-  const level = document.getElementById("level").value;
-  const title = document.getElementById("title").value.trim();
-  const message = document.getElementById("message").value.trim();
+  saveMsg.textContent = "Enregistrement...";
 
-  const payload = {
-    level,
-    active: level !== "none",
-    title: title || (level === "none" ? "Aucune alerte" : "ALERTE MÉTÉO"),
-    message
-  };
+const level = document.getElementById("level").value;
+const region = document.getElementById("region").value;
+const title = document.getElementById("title").value.trim();
+const message = document.getElementById("message").value.trim();
+
+const payload = {
+  level,
+  active: level !== "none",
+  region,
+  title: title || (level === "none" ? "Aucune alerte" : "ALERTE MÉTÉO"),
+  message
+};
 
   const res = await fetch("/api/admin/alert", {
     method: "POST",
