@@ -1,7 +1,7 @@
 {
   "active": false,
   "level": "none",
-  "region": "Aucune",
+  "zones": [],
   "title": "Aucune alerte",
   "message": "",
   "startAt": "",
