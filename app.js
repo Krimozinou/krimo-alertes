@@ -3,23 +3,20 @@
 // ✅ Multi-wilayas (regions / zones / wilayas / region)
 // ✅ Carte Leaflet (points depuis /main.json)
 // ✅ Zoom auto sur wilayas sélectionnées
-// ✅ Fix Alger (Alger / Algiers)
-// ✅ Icône (pluie/orage/vent...) dans le titre
+// ✅ Icône pluie/orage/vent dans le titre
 // ===============================
 
 let map;
-let markersLayer;
-
+let markersLayer = null;
 let wilayasIndex = null; // Map(normalizedName -> {name, lat, lon})
 
-// --------- Helpers ----------
 function normalizeName(s) {
   return (s || "")
     .toString()
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // accents
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[’']/g, " ")
     .replace(/-/g, " ")
     .replace(/\s+/g, " ");
@@ -38,59 +35,51 @@ function badgeClass(level, active) {
   return "badge " + (level || "none") + (active ? " blink" : "");
 }
 
-// ✅ Icône selon type (si data.hazard existe) OU détection depuis title/message
+// ✅ Détecter une icône à mettre devant le titre
 function detectHazardIcon(data) {
-  const hazardRaw = (data?.hazard || data?.type || data?.event || "").toString().toLowerCase();
-  const text = (hazardRaw + " " + (data?.title || "") + " " + (data?.message || ""))
-    .toLowerCase();
+  const t = normalizeName(data?.title || "");
+  const m = normalizeName(data?.message || "");
 
-  // Priorités (tu peux ajuster)
-  if (/(orage|orages|orageux|foudre)/.test(text)) return "⛈️";
-  if (/(vent|vents|rafale|rafales|tempete|tempête)/.test(text)) return "💨";
-  if (/(pluie|pluies|averse|averses|torrentielle|torrentielles)/.test(text)) return "🌧️";
-  if (/(inondation|inondations|crue|crues)/.test(text)) return "🌊";
-  if (/(neige|neiges|verglas|gel)/.test(text)) return "❄️";
-  if (/(canicule|chaleur)/.test(text)) return "🔥";
+  // orage
+  if (t.includes("orage") || m.includes("orage")) return "⛈️";
+  // vent
+  if (t.includes("vent") || m.includes("vent") || t.includes("tempete") || m.includes("tempete")) return "🌬️";
+  // pluie / inondation
+  if (t.includes("pluie") || m.includes("pluie") || t.includes("inond") || m.includes("inond")) return "🌧️";
 
-  return ""; // rien
+  // sinon selon niveau
+  if (data?.level === "red") return "🚨";
+  if (data?.level === "orange") return "⚠️";
+  if (data?.level === "yellow") return "🟡";
+  return "";
 }
 
-// --------- Init carte ----------
 function initMapIfNeeded() {
   const mapDiv = document.getElementById("map");
   if (!mapDiv) return;
+  if (map) return;
 
-  if (map) return; // déjà init
-
-  map = L.map("map", {
-    zoomControl: true,
-    scrollWheelZoom: false
-  });
+  map = L.map("map", { zoomControl: true, scrollWheelZoom: false });
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 18,
-    attribution: "© OpenStreetMap"
+    attribution: "© OpenStreetMap",
   }).addTo(map);
 
+  // ✅ layer des points
   markersLayer = L.layerGroup().addTo(map);
 
-  // Vue par défaut Algérie
   map.setView([28.0, 2.5], 5);
-
-  // Fix affichage (mobile)
   setTimeout(() => map.invalidateSize(), 300);
 }
 
-// --------- Charger index wilayas depuis main.json ----------
 async function loadWilayasIndex() {
   if (wilayasIndex) return wilayasIndex;
 
   const res = await fetch("/main.json", { cache: "no-store" });
-  if (!res.ok) throw new Error("main.json introuvable ( /main.json )");
+  if (!res.ok) throw new Error("main.json introuvable");
 
   const data = await res.json();
-
-  // data.wilayas = [{name, latitude, longitude, ...}]
   const list = Array.isArray(data.wilayas) ? data.wilayas : [];
 
   wilayasIndex = new Map();
@@ -103,25 +92,25 @@ async function loadWilayasIndex() {
 
     wilayasIndex.set(normalizeName(n), { name: n, lat, lon });
 
-    // ✅ alias spécial Alger (Alger / Algiers)
-    if (normalizeName(n) === "algiers") {
-      wilayasIndex.set("alger", { name: n, lat, lon });
-    }
-    if (normalizeName(n) === "alger") {
-      wilayasIndex.set("algiers", { name: n, lat, lon });
-    }
+    // ✅ alias Alger / Algiers
+    if (normalizeName(n) === "algiers") wilayasIndex.set("alger", { name: n, lat, lon });
+    if (normalizeName(n) === "alger") wilayasIndex.set("algiers", { name: n, lat, lon });
   }
 
   return wilayasIndex;
 }
 
-// --------- Placer points ----------
 function clearMarkers() {
-  if (markersLayer) markersLayer.clearLayers();
+  try {
+    if (markersLayer) markersLayer.clearLayers();
+  } catch {}
 }
 
 function addMarkersFor(wilayas, level) {
-  if (!map || !markersLayer || !wilayasIndex) return;
+  if (!map || !wilayasIndex) return;
+
+  // ✅ si layer cassée, on la recrée
+  if (!markersLayer) markersLayer = L.layerGroup().addTo(map);
 
   clearMarkers();
 
@@ -134,19 +123,25 @@ function addMarkersFor(wilayas, level) {
   const bounds = [];
 
   for (const name of wilayas) {
-    const key = normalizeName(name);
-    const found = wilayasIndex.get(key);
+    const found = wilayasIndex.get(normalizeName(name));
     if (!found) continue;
 
-    const marker = L.circleMarker([found.lat, found.lon], {
-      radius: 9,
-      color: color,
+    const circle = L.circleMarker([found.lat, found.lon], {
+      radius: 10,
+      color,
       fillColor: color,
-      fillOpacity: 0.85,
+      fillOpacity: 0.9,
       weight: 2
-    }).addTo(markersLayer);
+    });
 
-    marker.bindPopup("📍 " + (name || found.name));
+    // ✅ IMPORTANT : on ajoute à la layer, sinon direct à la map
+    try {
+      circle.addTo(markersLayer);
+    } catch {
+      circle.addTo(map);
+    }
+
+    circle.bindPopup("📍 " + name);
     bounds.push([found.lat, found.lon]);
   }
 
@@ -161,7 +156,6 @@ function addMarkersFor(wilayas, level) {
   setTimeout(() => map.invalidateSize(), 150);
 }
 
-// --------- Refresh UI ----------
 async function refresh() {
   const res = await fetch("/api/alert", { cache: "no-store" });
   const data = await res.json();
@@ -175,58 +169,52 @@ async function refresh() {
   const level = data.level || "none";
   const active = !!data.active;
 
-  // ✅ Multi champs possibles
   const wilayas =
     Array.isArray(data.regions) ? data.regions :
     Array.isArray(data.zones) ? data.zones :
     Array.isArray(data.wilayas) ? data.wilayas :
     (data.region ? [data.region] : []);
 
-  // Badge
   if (badge) badge.className = badgeClass(level, active);
 
-  // Date
+  // ✅ Date à droite
   if (updatedAt) {
     updatedAt.textContent = data.updatedAt
       ? new Date(data.updatedAt).toLocaleString("fr-FR")
       : "—";
   }
 
-  // Icône
-  const icon = detectHazardIcon(data);
+  initMapIfNeeded();
 
-  // Cas aucune alerte
   if (!active || level === "none") {
     if (badge) badge.textContent = "✅ Aucune alerte";
     if (title) title.textContent = "Aucune alerte";
     if (message) message.textContent = "";
     if (region) region.textContent = "";
 
-    initMapIfNeeded();
-    try { await loadWilayasIndex(); } catch {}
     clearMarkers();
     return;
   }
 
-  // Alerte active
-  if (badge) badge.textContent = badgeText(level);
-  if (title) {
-    const baseTitle = data.title || "ALERTE MÉTÉO";
-    title.textContent = (icon ? icon + " " : "") + baseTitle;
-  }
-  if (message) message.textContent = data.message || "";
-  if (region) {
-    region.textContent = wilayas.length ? "📍 Wilayas : " + wilayas.join(" - ") : "";
-  }
+  // ✅ icône dans le titre
+  const ico = detectHazardIcon(data);
+  if (title) title.textContent = (ico ? (ico + " ") : "") + (data.title || "ALERTE MÉTÉO");
 
-  // Carte + points
-  initMapIfNeeded();
-  const idx = await loadWilayasIndex();
-  wilayasIndex = idx;
-  addMarkersFor(wilayas, level);
+  if (badge) badge.textContent = badgeText(level);
+  if (message) message.textContent = data.message || "";
+  if (region) region.textContent = wilayas.length ? "📍 Wilayas : " + wilayas.join(" - ") : "";
+
+  try {
+    wilayasIndex = await loadWilayasIndex();
+    addMarkersFor(wilayas, level);
+  } catch (e) {
+    // si main.json ne charge pas, au moins on ne casse pas la page
+    clearMarkers();
+    console.error("Erreur main.json / points:", e);
+  }
 }
 
-// --------- Boutons partage ----------
+// Boutons
 const shareFbBtn = document.getElementById("shareFbBtn");
 const copyLinkBtn = document.getElementById("copyLinkBtn");
 
@@ -248,6 +236,5 @@ if (copyLinkBtn) {
   });
 }
 
-// --------- Start ----------
 refresh();
 setInterval(refresh, 30000);
