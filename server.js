@@ -12,10 +12,7 @@ app.use(cookieParser());
 // ✅ Render HTTPS Proxy
 app.set("trust proxy", 1);
 
-// ✅ Static files
-// 1) on sert d'abord /public (recommandé)
-// 2) puis on sert la racine (compat si tes fichiers sont à la racine)
-app.use(express.static(path.join(__dirname, "public")));
+// ✅ Static files (root)
 app.use(express.static(__dirname));
 
 const DATA_PATH = path.join(__dirname, "alert.json");
@@ -56,6 +53,7 @@ function isNowBetween(startAt, endAt) {
 function normalizeAlert(data) {
   const merged = { ...defaultAlert(), ...data };
 
+  // si "region" string → convertir en array
   if (
     merged.region &&
     (!Array.isArray(merged.regions) || merged.regions.length === 0)
@@ -63,29 +61,45 @@ function normalizeAlert(data) {
     merged.regions = [merged.region];
   }
 
-  if (
-    Array.isArray(merged.regions) &&
-    merged.regions.length > 0 &&
-    !merged.region
-  ) {
+  // remplir region avec première wilaya
+  if (Array.isArray(merged.regions) && merged.regions.length > 0 && !merged.region) {
     merged.region = merged.regions[0];
   }
 
   if (!Array.isArray(merged.regions)) merged.regions = [];
+
   return merged;
 }
 
 // ======================================
-// ✅ Activer/désactiver automatique horaire
+// ✅ Activer/désactiver automatique horaire (FIX IMPORTANT)
 // ======================================
 function computeActive(data) {
+  // si startAt/endAt existent → on calcule active
   if (data.startAt || data.endAt) {
     const ok = isNowBetween(data.startAt, data.endAt);
     data.active = ok && data.level !== "none";
-    if (!data.active) data.level = "none";
-  } else {
-    data.active = data.level !== "none";
+
+    // ✅ SI PAS ACTIVE → on nettoie tout (sinon l'UI affiche wilayas alors que "Aucune alerte")
+    if (!data.active) {
+      const reset = defaultAlert();
+      reset.updatedAt = data.updatedAt || new Date().toISOString();
+      return reset;
+    }
+
+    return data;
   }
+
+  // sinon active dépend du level
+  data.active = data.level !== "none";
+
+  // ✅ si level none → reset complet
+  if (!data.active) {
+    const reset = defaultAlert();
+    reset.updatedAt = data.updatedAt || new Date().toISOString();
+    return reset;
+  }
+
   return data;
 }
 
@@ -125,17 +139,15 @@ function authMiddleware(req, res, next) {
 }
 
 // ======================================
-// ✅ Pages (prend public si existe sinon racine)
+// ✅ Pages
 // ======================================
-function sendPage(res, fileName) {
-  const p1 = path.join(__dirname, "public", fileName);
-  const p2 = path.join(__dirname, fileName);
-  if (fs.existsSync(p1)) return res.sendFile(p1);
-  return res.sendFile(p2);
-}
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
+app.get("/admin", (req, res) => res.sendFile(path.join(__dirname, "admin.html")));
 
-app.get("/", (req, res) => sendPage(res, "index.html"));
-app.get("/admin", (req, res) => sendPage(res, "admin.html"));
+// ✅ IMPORTANT: forcer main.json toujours accessible (fix Render / static)
+app.get("/main.json", (req, res) => {
+  res.sendFile(path.join(__dirname, "main.json"));
+});
 
 // ======================================
 // ✅ API PUBLIC
@@ -150,13 +162,8 @@ app.get("/api/alert", (req, res) => {
 app.post("/api/login", (req, res) => {
   const { username, password } = req.body || {};
 
-  if (
-    username === process.env.ADMIN_USER &&
-    password === process.env.ADMIN_PASS
-  ) {
-    const token = jwt.sign({ u: username }, process.env.JWT_SECRET, {
-      expiresIn: "7d",
-    });
+  if (username === process.env.ADMIN_USER && password === process.env.ADMIN_PASS) {
+    const token = jwt.sign({ u: username }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
     res.cookie("krimo_token", token, {
       httpOnly: true,
@@ -191,15 +198,12 @@ app.post("/api/alert", authMiddleware, (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
+    // ✅ Si aucune alerte → reset complet
     if (data.level === "none") {
-      data.active = false;
-      data.title = "Aucune alerte";
-      data.message = "";
-      data.regions = [];
-      data.region = "";
-      data.startAt = "";
-      data.endAt = "";
-      data.updatedAt = new Date().toISOString();
+      const reset = defaultAlert();
+      reset.updatedAt = new Date().toISOString();
+      writeAlert(reset);
+      return res.json({ ok: true });
     }
 
     writeAlert(data);
