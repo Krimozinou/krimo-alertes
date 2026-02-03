@@ -4,17 +4,32 @@ async function refresh() {
 
   const badge = document.getElementById("badge");
   const title = document.getElementById("title");
-  const region = document.getElementById("region"); // on garde l'id "region" dans HTML, mais on affiche Zone
+  const region = document.getElementById("region"); // id "region" dans HTML
   const message = document.getElementById("message");
   const updatedAt = document.getElementById("updatedAt");
 
   const level = data.level || "none";
 
-  // Classe du badge + clignotement si actif
-  badge.className = "badge " + level + (data.active ? " blink" : "");
+  // ✅ Gestion tranche horaire (startAt / endAt)
+  const now = new Date();
+  const startAt = data.startAt ? new Date(data.startAt) : null;
+  const endAt = data.endAt ? new Date(data.endAt) : null;
 
-  // Cas : pas d’alerte
-  if (!data.active || level === "none") {
+  const isInWindow =
+    (!startAt || now >= startAt) &&
+    (!endAt || now <= endAt);
+
+  // ✅ Actif seulement si :
+  // - data.active = true
+  // - level != none
+  // - tranche horaire OK
+  const isActive = !!data.active && level !== "none" && isInWindow;
+
+  // Classe du badge + clignotement si actif
+  badge.className = "badge " + level + (isActive ? " blink" : "");
+
+  // ✅ Si pas actif -> Aucune alerte
+  if (!isActive) {
     badge.textContent = "✅ Aucune alerte";
     title.textContent = "Aucune alerte";
     message.textContent = "";
@@ -31,10 +46,10 @@ async function refresh() {
     title.textContent = data.title || "ALERTE MÉTÉO";
     message.textContent = data.message || "";
 
-    // ✅ Zone/Wilaya (stockée dans data.region)
+    // ✅ Wilaya/Zone (stockée dans data.region)
     const z = data.region || "";
     if (region) {
-      region.textContent = z ? ("📍 Zone : " + z) : "";
+      region.textContent = z ? ("📍 Wilaya : " + z) : "";
     }
   }
 
