@@ -4,14 +4,29 @@ const loginMsg = document.getElementById("loginMsg");
 const saveMsg = document.getElementById("saveMsg");
 const logoutBtn = document.getElementById("logoutBtn");
 
+function toDatetimeLocal(iso) {
+  if (!iso) return "";
+  // iso -> "YYYY-MM-DDTHH:MM"
+  return iso.slice(0, 16);
+}
+
+function toISO(dtLocal) {
+  // "YYYY-MM-DDTHH:MM" -> ISO
+  if (!dtLocal) return "";
+  return new Date(dtLocal).toISOString();
+}
+
 async function loadCurrent() {
   const r = await fetch("/api/alert", { cache: "no-store" });
   const data = await r.json();
 
   document.getElementById("level").value = data.level || "none";
-  document.getElementById("region").value = data.region || "Aucune";
+  document.getElementById("region").value = data.region || "OUEST";
   document.getElementById("title").value = data.title || "";
   document.getElementById("message").value = data.message || "";
+
+  document.getElementById("startAt").value = toDatetimeLocal(data.startAt);
+  document.getElementById("endAt").value = toDatetimeLocal(data.endAt);
 }
 
 document.getElementById("loginBtn").addEventListener("click", async () => {
@@ -27,6 +42,7 @@ document.getElementById("loginBtn").addEventListener("click", async () => {
   });
 
   const out = await res.json().catch(() => ({}));
+
   if (!res.ok || !out.ok) {
     loginMsg.textContent = out.error || "Erreur de connexion";
     return;
@@ -35,6 +51,7 @@ document.getElementById("loginBtn").addEventListener("click", async () => {
   loginBox.style.display = "none";
   panel.style.display = "block";
   logoutBtn.style.display = "inline-block";
+
   await loadCurrent();
 });
 
@@ -51,12 +68,16 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
   const title = document.getElementById("title").value.trim();
   const message = document.getElementById("message").value.trim();
 
+  const startAtLocal = document.getElementById("startAt").value;
+  const endAtLocal = document.getElementById("endAt").value;
+
   const payload = {
     level,
     region,
     title: title || (level === "none" ? "Aucune alerte" : "ALERTE MÉTÉO"),
-    message,
-    updatedAt: new Date().toISOString()
+    message: message || "",
+    startAt: toISO(startAtLocal),
+    endAt: toISO(endAtLocal)
   };
 
   const res = await fetch("/api/alert", {
@@ -67,7 +88,7 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
 
   const out = await res.json().catch(() => ({}));
   if (!res.ok || !out.ok) {
-    saveMsg.textContent = "❌ Erreur: " + (out.error || "Impossible");
+    saveMsg.textContent = out.error || "Erreur";
     return;
   }
 
@@ -78,27 +99,17 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
 document.getElementById("disableBtn").addEventListener("click", async () => {
   saveMsg.textContent = "Désactivation...";
 
-  const payload = {
-    level: "none",
-    region: "Aucune",
-    title: "Aucune alerte",
-    message: "",
-    updatedAt: new Date().toISOString()
-  };
-
-  const res = await fetch("/api/alert", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+  const res = await fetch("/api/disable", {
+    method: "POST"
   });
 
   const out = await res.json().catch(() => ({}));
   if (!res.ok || !out.ok) {
-    saveMsg.textContent = "❌ Erreur: " + (out.error || "Impossible");
+    saveMsg.textContent = out.error || "Erreur";
     return;
   }
 
   await loadCurrent();
-  saveMsg.textContent = "✅ Alerte désactivée";
+  saveMsg.textContent = "✅ Désactivée";
   setTimeout(() => (saveMsg.textContent = ""), 2000);
 });
