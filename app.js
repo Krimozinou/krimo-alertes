@@ -9,27 +9,26 @@ async function refresh() {
   const updatedAt = document.getElementById("updatedAt");
 
   const level = data.level || "none";
+
   badge.className = "badge " + level + (data.active ? " blink" : "");
 
-  // Texte du badge
-  if (!data.active) {
+  if (!data.active || level === "none") {
     badge.textContent = "✅ Aucune alerte";
+    title.textContent = "Aucune alerte";
+    message.textContent = "";
+    region.textContent = "";
   } else {
     badge.textContent =
       level === "yellow" ? "🟡 Vigilance Jaune" :
       level === "orange" ? "🟠 Vigilance Orange" :
       level === "red" ? "🔴 Vigilance Rouge" :
       "⚠️ Alerte";
-  }
 
-  title.textContent = data.active ? (data.title || "ALERTE MÉTÉO") : "Aucune alerte";
-  message.textContent = data.message || "";
+    title.textContent = data.title || "ALERTE MÉTÉO";
+    message.textContent = data.message || "";
 
-  // ✅ Afficher la région
-  if (data.active && data.region && data.region !== "Aucune") {
-    region.textContent = "📍 Région : " + data.region;
-  } else {
-    region.textContent = "";
+    const r = data.region || "Aucune";
+    region.textContent = r && r !== "Aucune" ? ("📍 Région : " + r) : "";
   }
 
   updatedAt.textContent = data.updatedAt
@@ -39,3 +38,26 @@ async function refresh() {
 
 refresh();
 setInterval(refresh, 30000);
+
+// ✅ Bouton partager Facebook
+const shareFbBtn = document.getElementById("shareFbBtn");
+const copyLinkBtn = document.getElementById("copyLinkBtn");
+
+if (shareFbBtn) {
+  shareFbBtn.addEventListener("click", () => {
+    const url = encodeURIComponent(window.location.href);
+    window.open("https://www.facebook.com/sharer/sharer.php?u=" + url, "_blank");
+  });
+}
+
+// ✅ Copier le lien
+if (copyLinkBtn) {
+  copyLinkBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      alert("Lien copié ✅");
+    } catch {
+      prompt("Copie manuelle :", window.location.href);
+    }
+  });
+}
