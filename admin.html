@@ -2,58 +2,61 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin — Krimo Météo Algérie</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Panneau Admin</title>
   <link rel="stylesheet" href="/app.css" />
 </head>
 <body>
-  <div class="wrap" style="padding-top:24px;">
-    <div class="card">
-      <div class="row">
-        <h2 style="margin:0;">Panneau Admin</h2>
-        <button id="logoutBtn" class="secondary" style="display:none;">Déconnexion</button>
+
+  <div class="card" style="max-width:900px; margin:30px auto;">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <h1>Panneau Admin</h1>
+      <button id="logoutBtn" class="btn" style="display:none;">Déconnexion</button>
+    </div>
+
+    <!-- Login -->
+    <div id="loginBox">
+      <p id="loginMsg" style="color:#c00; font-weight:700;"></p>
+
+      <div class="grid" style="margin-top:10px;">
+        <input id="username" placeholder="Utilisateur" />
+        <input id="password" type="password" placeholder="Mot de passe" />
       </div>
 
-      <div id="loginBox">
-        <p class="muted">Connexion requise.</p>
-        <div class="grid">
-          <input id="username" placeholder="Nom d’utilisateur" />
-          <input id="password" type="password" placeholder="Mot de passe" />
-        </div>
-        <div style="margin-top:12px;">
-          <button id="loginBtn">Se connecter</button>
-        </div>
-        <p id="loginMsg" class="muted" style="margin-top:10px;"></p>
+      <button id="loginBtn" class="btn" style="margin-top:12px;">Connexion</button>
+    </div>
+
+    <!-- Panel -->
+    <div id="panel" style="display:none; margin-top:14px;">
+      <div class="grid">
+        <select id="level">
+          <option value="none">Aucune alerte</option>
+          <option value="yellow">Jaune (Niveau 01)</option>
+          <option value="orange">Orange (Niveau 02)</option>
+          <option value="red">Rouge (Niveau 03)</option>
+        </select>
+
+        <select id="region">
+          <option value="Aucune">Aucune</option>
+          <option value="OUEST">OUEST</option>
+          <option value="CENTRE-OUEST">CENTRE-OUEST</option>
+          <option value="CENTRE">CENTRE</option>
+          <option value="CENTRE-EST">CENTRE-EST</option>
+          <option value="EST">EST</option>
+        </select>
       </div>
 
-      <div id="panel" style="display:none; margin-top:14px;">
-        <div class="grid">
-          <select id="level">
-            <option value="none">Aucune alerte</option>
-            <option value="yellow">Jaune (Niveau 01)</option>
-            <option value="orange">Orange (Niveau 02)</option>
-            <option value="red">Rouge (Niveau 03)</option>
-          </select>
-          <select id="region">
-            <option value="OUEST">OUEST</option>
-            <option value="CENTRE-OUEST">CENTRE-OUEST</option>
-            <option value="CENTRE">CENTRE</option>
-            <option value="CENTRE-EST">CENTRE-EST</option>
-            <option value="EST">EST</option>
-           </select>
-          <input id="title" placeholder="Titre (ex: VIGILANCE ORANGE)" />
-        </div>
+      <input id="title" placeholder="Titre (ex : VIGILANCE ORANGE)" style="margin-top:12px;" />
+      <textarea id="message" placeholder="Message (ex: Soyez très vigilant...)" style="margin-top:12px; min-height:120px;"></textarea>
 
-        <textarea id="message" rows="4" placeholder="Message (ex: Soyez très vigilant…)" style="width:100%; margin-top:12px;"></textarea>
-
-        <div class="row" style="margin-top:12px;">
-          <button id="saveBtn">Publier l’alerte</button>
-          <span class="muted" id="saveMsg"></span>
-        </div>
+      <div style="display:flex; gap:10px; margin-top:12px; align-items:center;">
+        <button id="saveBtn" class="btn">Publier l’alerte</button>
+        <button id="disableBtn" class="btn" style="background:#444;">Désactiver alerte</button>
+        <span id="saveMsg" style="font-weight:700;"></span>
       </div>
 
-      <p class="muted" style="margin-top:14px; font-size:13px;">
-        Page publique : <a href="/" target="_blank" rel="noreferrer">/</a> — Admin : <a href="/admin" target="_blank" rel="noreferrer">/admin</a>
+      <p style="margin-top:12px; opacity:.75;">
+        Page publique : <a href="/" target="_blank">/</a> — Admin : <a href="/admin" target="_blank">/admin</a>
       </p>
     </div>
   </div>
