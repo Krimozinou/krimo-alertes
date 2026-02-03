@@ -1,20 +1,20 @@
 // ===============================
-// Krimo Alertes — app.js (COMPLET + STABLE Render)
-// ✅ Multi-wilayas (regions / zones / wilayas / region)
-// ✅ Carte Leaflet (points depuis /main.json)
-// ✅ Zoom auto sur wilayas sélectionnées
-// ✅ Fix Alger (Alger / Algiers)
-// ✅ Icône météo dans le titre (pluie / orage / vent)
-// ✅ Anti-bug Render sleep: garde la dernière donnée + retries
+// Krimo Alertes — app.js (COMPLET + main.json STABLE)
+// ✅ Multi-wilayas
+// ✅ Leaflet + points depuis /main.json
+// ✅ Fix Alger
+// ✅ Icône météo
+// ✅ Anti-Render sleep: garde dernière alerte + cache main.json localStorage
 // ===============================
 
 let map;
 let markersLayer;
 
-let wilayasIndex = null;          // Map(normalizedName -> {name, lat, lon})
-let lastGoodAlert = null;         // dernière alerte OK (pour éviter écran "cassé")
-let lastGoodWilayasIndex = null;  // dernier index OK
-let consecutiveFails = 0;
+let wilayasIndex = null;
+let lastGoodAlert = null;
+let lastGoodWilayasIndex = null;
+
+const MAINJSON_CACHE_KEY = "krimo_mainjson_cache_v1";
 
 // --------- Helpers ----------
 function normalizeName(s) {
@@ -42,36 +42,27 @@ function badgeClass(level, active) {
   return "badge " + (level || "none") + (active ? " blink" : "");
 }
 
-// Icône météo (simple et fiable)
 function detectHazardIcon(data) {
   const t = normalizeName(data?.title || "");
   const m = normalizeName(data?.message || "");
 
-  // orage / tempête
   if (t.includes("orage") || m.includes("orage") || t.includes("orageux") || m.includes("orageux")) return "⛈️";
-
-  // vent
   if (t.includes("vent") || m.includes("vent") || t.includes("tempete") || m.includes("tempete")) return "💨";
-
-  // pluie / inond
   if (t.includes("pluie") || m.includes("pluie") || t.includes("inond") || m.includes("inond")) return "🌧️";
 
-  // fallback selon niveau
   if (data?.level === "red") return "🚨";
   if (data?.level === "orange") return "⚠️";
   if (data?.level === "yellow") return "🟡";
   return "";
 }
 
-// --------- Mini UI erreur ----------
+// --------- UI erreur ----------
 function setLoadError(text) {
-  // essaie d'utiliser un bloc existant si tu l'as
   let el =
     document.getElementById("loadError") ||
     document.getElementById("error") ||
     document.getElementById("errorBox");
 
-  // si aucun bloc n'existe, on en crée un juste avant les boutons
   if (!el) {
     const copyBtn = document.getElementById("copyLinkBtn");
     const parent = copyBtn?.closest(".card") || document.body;
@@ -83,7 +74,7 @@ function setLoadError(text) {
     el.style.background = "#fff3cd";
     el.style.color = "#6b4e00";
     el.style.fontWeight = "600";
-    // on le met avant la zone boutons si possible
+
     if (copyBtn && copyBtn.parentElement) {
       copyBtn.parentElement.parentElement?.insertBefore(el, copyBtn.parentElement);
     } else {
@@ -96,7 +87,7 @@ function setLoadError(text) {
 }
 
 // --------- Fetch JSON avec timeout + cache-bust ----------
-async function fetchJSON(url, timeoutMs = 8000) {
+async function fetchJSON(url, timeoutMs = 15000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
 
@@ -117,13 +108,9 @@ async function fetchJSON(url, timeoutMs = 8000) {
 function initMapIfNeeded() {
   const mapDiv = document.getElementById("map");
   if (!mapDiv) return;
-
   if (map) return;
 
-  map = L.map("map", {
-    zoomControl: true,
-    scrollWheelZoom: false
-  });
+  map = L.map("map", { zoomControl: true, scrollWheelZoom: false });
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 18,
@@ -131,19 +118,13 @@ function initMapIfNeeded() {
   }).addTo(map);
 
   markersLayer = L.layerGroup().addTo(map);
-
   map.setView([28.0, 2.5], 5);
-
   setTimeout(() => map.invalidateSize(), 300);
 }
 
-// --------- Charger index wilayas depuis main.json ----------
-async function loadWilayasIndex() {
-  if (wilayasIndex) return wilayasIndex;
-
-  const data = await fetchJSON("/main.json", 12000);
-
-  const list = Array.isArray(data.wilayas) ? data.wilayas : [];
+// --------- Construire l'index wilayas à partir d'un JSON main.json ----------
+function buildWilayasIndexFromMainJson(data) {
+  const list = Array.isArray(data?.wilayas) ? data.wilayas : [];
   const idx = new Map();
 
   for (const w of list) {
@@ -159,10 +140,55 @@ async function loadWilayasIndex() {
     if (normalizeName(n) === "alger") idx.set("algiers", { name: n, lat, lon });
   }
 
-  wilayasIndex = idx;
-  lastGoodWilayasIndex = idx;
+  return idx;
+}
 
-  return wilayasIndex;
+// --------- Charger main.json (avec RETRY + cache localStorage) ----------
+async function loadWilayasIndex() {
+  if (wilayasIndex) return wilayasIndex;
+
+  // 1) essayer de charger depuis le cache localStorage (instantané)
+  try {
+    const cached = localStorage.getItem(MAINJSON_CACHE_KEY);
+    if (cached) {
+      const data = JSON.parse(cached);
+      const idx = buildWilayasIndexFromMainJson(data);
+      if (idx && idx.size > 0) {
+        wilayasIndex = idx;
+        lastGoodWilayasIndex = idx;
+      }
+    }
+  } catch {}
+
+  // 2) essayer de récupérer le vrai main.json (3 tentatives)
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const data = await fetchJSON("/main.json", 25000); // timeout plus long
+      // stocker en cache pour les prochains "sleep"
+      try {
+        localStorage.setItem(MAINJSON_CACHE_KEY, JSON.stringify(data));
+      } catch {}
+
+      const idx = buildWilayasIndexFromMainJson(data);
+      wilayasIndex = idx;
+      lastGoodWilayasIndex = idx;
+      return wilayasIndex;
+    } catch (e) {
+      lastErr = e;
+      // petite pause entre tentatives
+      await new Promise(r => setTimeout(r, attempt * 800));
+    }
+  }
+
+  // 3) si fetch échoue, mais on a déjà un index (cache ou ancien) => on l'utilise sans “casser”
+  if (wilayasIndex && wilayasIndex.size > 0) return wilayasIndex;
+  if (lastGoodWilayasIndex && lastGoodWilayasIndex.size > 0) {
+    wilayasIndex = lastGoodWilayasIndex;
+    return wilayasIndex;
+  }
+
+  throw lastErr || new Error("main.json introuvable");
 }
 
 // --------- Markers ----------
@@ -190,7 +216,7 @@ function addMarkersFor(wilayas, level) {
 
     const marker = L.circleMarker([found.lat, found.lon], {
       radius: 9,
-      color: color,
+      color,
       fillColor: color,
       fillOpacity: 0.85,
       weight: 2
@@ -200,18 +226,14 @@ function addMarkersFor(wilayas, level) {
     bounds.push([found.lat, found.lon]);
   }
 
-  if (bounds.length === 1) {
-    map.setView(bounds[0], 9);
-  } else if (bounds.length > 1) {
-    map.fitBounds(bounds, { padding: [30, 30] });
-  } else {
-    map.setView([28.0, 2.5], 5);
-  }
+  if (bounds.length === 1) map.setView(bounds[0], 9);
+  else if (bounds.length > 1) map.fitBounds(bounds, { padding: [30, 30] });
+  else map.setView([28.0, 2.5], 5);
 
   setTimeout(() => map.invalidateSize(), 150);
 }
 
-// --------- Refresh UI (anti-Render sleep) ----------
+// --------- Refresh UI ----------
 async function refresh() {
   const badge = document.getElementById("badge");
   const title = document.getElementById("title");
@@ -221,27 +243,18 @@ async function refresh() {
 
   initMapIfNeeded();
 
-  let data = null;
-
   // 1) Charger l'alerte
+  let data;
   try {
-    data = await fetchJSON("/api/alert", 8000);
+    data = await fetchJSON("/api/alert", 12000);
     lastGoodAlert = data;
-    consecutiveFails = 0;
-    setLoadError(""); // efface
-  } catch (e) {
-    consecutiveFails++;
-
-    // si on a déjà une donnée OK, on continue à l'afficher
+  } catch {
     if (lastGoodAlert) {
       data = lastGoodAlert;
-
-      // on affiche juste un message "Render se réveille"
-      setLoadError("Serveur en démarrage (Render) — les données vont revenir automatiquement…");
+      setLoadError("Serveur en démarrage (Render) — les données reviennent…");
     } else {
-      // rien à afficher => message clair
-      setLoadError("Problème de chargement (api/alert). Réessaie dans quelques secondes…");
-      return; // on sort, sans casser la page
+      setLoadError("Problème de chargement (api/alert).");
+      return;
     }
   }
 
@@ -254,10 +267,8 @@ async function refresh() {
     Array.isArray(data.wilayas) ? data.wilayas :
     (data.region ? [data.region] : []);
 
-  // Badge
   if (badge) badge.className = badgeClass(level, active);
 
-  // Icône + titre
   const icon = detectHazardIcon(data);
 
   if (!active || level === "none") {
@@ -265,8 +276,6 @@ async function refresh() {
     if (title) title.textContent = (icon ? icon + " " : "") + "Aucune alerte";
     if (message) message.textContent = "";
     if (region) region.textContent = "";
-
-    // on garde la carte, mais sans points
     clearMarkers();
   } else {
     if (badge) badge.textContent = badgeText(level);
@@ -274,29 +283,26 @@ async function refresh() {
     if (message) message.textContent = data.message || "";
     if (region) region.textContent = wilayas.length ? "📍 Wilayas : " + wilayas.join(" - ") : "";
 
-    // 2) Charger main.json (index)
+    // 2) Charger main.json (cache + retry)
     try {
       wilayasIndex = await loadWilayasIndex();
-    } catch (e) {
-      // si main.json échoue mais on avait déjà un index OK => on l'utilise
-      if (lastGoodWilayasIndex) {
-        wilayasIndex = lastGoodWilayasIndex;
-        setLoadError("Serveur en démarrage (Render) — points en cours de retour…");
+      setLoadError(""); // efface car on a l'index
+      addMarkersFor(wilayas, level);
+    } catch {
+      // si on a au moins un cache utilisable, on n'affiche pas l'erreur
+      if (wilayasIndex && wilayasIndex.size > 0) {
+        setLoadError("");
+        addMarkersFor(wilayas, level);
       } else {
         setLoadError("Problème de chargement (main.json).");
-        return;
       }
     }
-
-    addMarkersFor(wilayas, level);
   }
 
-  // Date (garde la dernière si Render a dormi)
+  // Date
   if (updatedAt) {
     const iso = data.updatedAt || data.updated_at || data.lastUpdated || "";
-    updatedAt.textContent = iso
-      ? new Date(iso).toLocaleString("fr-FR")
-      : "—";
+    updatedAt.textContent = iso ? new Date(iso).toLocaleString("fr-FR") : "—";
   }
 }
 
@@ -324,10 +330,9 @@ if (copyLinkBtn) {
 
 // --------- Start ----------
 refresh();
-
-// refresh normal
 setInterval(refresh, 30000);
 
-// petit retry rapide au démarrage (utile pour Render waking up)
+// retries rapides (utile quand Render se réveille)
 setTimeout(refresh, 4000);
 setTimeout(refresh, 9000);
+setTimeout(refresh, 15000);
