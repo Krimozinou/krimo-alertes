@@ -1,21 +1,15 @@
 // ===============================
 // Krimo Alertes — app.js (COMPLET)
-// ✅ Multi-wilayas
-// ✅ Carte Leaflet
-// ✅ Colorer wilayas concernées (si /wilayas.geojson existe)
-// ✅ Zoom auto sur wilayas sélectionnées
-// ✅ Icônes pluie/orage selon niveau
+// ✅ Multi-wilayas (regions / zones / wilayas / region)
+// ✅ Carte Leaflet (points depuis main.json)
+// ✅ Points rouges sur wilayas concernées + zoom auto
+// ✅ Heure "Dernière mise à jour" OK
 // ===============================
 
-let map = null;
-let baseLayer = null;
-let geoLayer = null;
-let markerLayer = null;
-let mapReady = false;
+let map;
+let markersLayer;
 
-let wilayasGeoJSON = null;
-
-// ---------- Helpers texte (pour matcher les noms wilayas) ----------
+// -------- Helpers ----------
 function normalizeName(s) {
   return (s || "")
     .toString()
@@ -28,14 +22,6 @@ function normalizeName(s) {
     .replace(/\s+/g, " ");
 }
 
-function getRegions(data) {
-  if (Array.isArray(data.regions)) return data.regions.filter(Boolean);
-  if (Array.isArray(data.zones)) return data.zones.filter(Boolean); // compat si ancien
-  if (typeof data.region === "string" && data.region.trim()) return [data.region.trim()];
-  return [];
-}
-
-// ---------- Badge ----------
 function badgeText(level) {
   return (
     level === "yellow" ? "🟡 Vigilance Jaune" :
@@ -45,162 +31,93 @@ function badgeText(level) {
   );
 }
 
-// ---------- Leaflet init (UNE SEULE FOIS) ----------
-function initMapOnce() {
+// -------- Leaflet init ----------
+function initMap() {
   const mapDiv = document.getElementById("map");
-  if (!mapDiv) return;
+  if (!mapDiv || typeof L === "undefined") return;
 
-  // Leaflet pas chargé
-  if (typeof window.L === "undefined") return;
+  map = L.map("map", { zoomControl: true, scrollWheelZoom: false });
 
-  if (mapReady) return; // ✅ IMPORTANT
-
-  map = L.map("map", {
-    zoomControl: true,
-    scrollWheelZoom: false,
-  });
-
-  baseLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 18,
-    attribution: "© OpenStreetMap"
+    attribution: "© OpenStreetMap",
   }).addTo(map);
 
-  markerLayer = L.layerGroup().addTo(map);
+  markersLayer = L.layerGroup().addTo(map);
 
+  // Vue par défaut Algérie
   map.setView([28.0, 2.5], 5);
 
-  mapReady = true;
-  setTimeout(() => map.invalidateSize(), 300);
+  // Fix mobile
+  setTimeout(() => map.invalidateSize(), 250);
 }
 
-// ---------- Charger GeoJSON wilayas ----------
-async function loadWilayasGeoJSON() {
-  try {
-    const res = await fetch("/wilayas.geojson", { cache: "no-store" });
-    if (!res.ok) throw new Error("wilayas.geojson introuvable");
-    wilayasGeoJSON = await res.json();
-  } catch {
-    wilayasGeoJSON = null; // pas grave
-  }
+// -------- Charger dataset wilayas (main.json) ----------
+async function loadWilayasDataset() {
+  // IMPORTANT: ton fichier doit s'appeler "main.json" et être au même niveau que index.html
+  const res = await fetch("/main.json", { cache: "no-store" });
+  if (!res.ok) throw new Error("main.json introuvable (vérifie qu'il est bien upload sur GitHub/Render)");
+  const json = await res.json();
+
+  // Le fichier contient { wilayas: [...] }
+  const list = Array.isArray(json.wilayas) ? json.wilayas : [];
+  return list;
 }
 
-// ---------- Style wilayas ----------
-function getWilayaStyle(isSelected, level) {
-  let fill = "#e6e6e6";
-  let stroke = "#bbbbbb";
+// -------- Afficher points sur la carte ----------
+function renderWilayasOnMap(wilayasList, selectedNames, level) {
+  if (!map || !markersLayer) return;
 
-  if (isSelected) {
-    if (level === "yellow") fill = "#f7d23b";
-    if (level === "orange") fill = "#ff8a1f";
-    if (level === "red") fill = "#ff3b30";
-    stroke = "#222";
-  }
+  markersLayer.clearLayers();
 
-  return {
-    color: stroke,
-    weight: isSelected ? 2 : 1,
-    fillColor: fill,
-    fillOpacity: isSelected ? 0.45 : 0.15,
-  };
-}
+  const selectedSet = new Set((selectedNames || []).map(normalizeName));
+  const bounds = [];
 
-// ---------- Dessiner wilayas ----------
-function renderWilayas(regions, level) {
-  if (!mapReady || !map || !wilayasGeoJSON) return;
+  // couleur selon niveau
+  const selectedColor =
+    level === "red" ? "#e11d2e" :
+    level === "orange" ? "#f97316" :
+    level === "yellow" ? "#facc15" :
+    "#2563eb"; // bleu si juste sélection
 
-  const selected = (regions || []).map(normalizeName);
+  wilayasList.forEach((w) => {
+    const name = w.name || "";
+    const lat = Number(w.latitude);
+    const lng = Number(w.longitude);
+    if (!name || !isFinite(lat) || !isFinite(lng)) return;
 
-  if (geoLayer) {
-    geoLayer.remove();
-    geoLayer = null;
-  }
+    const isSelected = selectedSet.has(normalizeName(name));
 
-  geoLayer = L.geoJSON(wilayasGeoJSON, {
-    style: (feature) => {
-      const name =
-        feature?.properties?.name ||
-        feature?.properties?.NAME ||
-        feature?.properties?.wilaya ||
-        feature?.properties?.WILAYA ||
-        "";
-      const isSel = selected.includes(normalizeName(name));
-      return getWilayaStyle(isSel, level);
-    }
-  }).addTo(map);
-}
+    // cercle (plus propre qu'un pin)
+    const circle = L.circleMarker([lat, lng], {
+      radius: isSelected ? 9 : 5,
+      weight: isSelected ? 3 : 1,
+      color: isSelected ? selectedColor : "#666",
+      fillColor: isSelected ? selectedColor : "#999",
+      fillOpacity: isSelected ? 0.9 : 0.5,
+    });
 
-// ---------- Icônes ----------
-function iconForLevel(level) {
-  const emoji =
-    level === "yellow" ? "⛅" :
-    level === "orange" ? "🌧️" :
-    level === "red" ? "⛈️" :
-    "ℹ️";
+    circle.bindPopup(
+      `<b>${name}</b>` +
+      (isSelected ? `<br/>⚠️ Wilaya concernée` : "")
+    );
 
-  return L.divIcon({
-    className: "krimo-marker",
-    html: `<div style="font-size:28px;filter:drop-shadow(0 6px 8px rgba(0,0,0,.25));">${emoji}</div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14]
+    circle.addTo(markersLayer);
+
+    if (isSelected) bounds.push([lat, lng]);
   });
-}
 
-function renderIconsOnSelected(regions, level) {
-  if (!mapReady || !markerLayer || !geoLayer) return;
-
-  markerLayer.clearLayers();
-  const selected = (regions || []).map(normalizeName);
-  const icon = iconForLevel(level);
-
-  geoLayer.eachLayer((layer) => {
-    const feat = layer.feature;
-    const name =
-      feat?.properties?.name ||
-      feat?.properties?.NAME ||
-      feat?.properties?.wilaya ||
-      feat?.properties?.WILAYA ||
-      "";
-
-    if (selected.includes(normalizeName(name))) {
-      const c = layer.getBounds().getCenter();
-      L.marker(c, { icon }).addTo(markerLayer);
-    }
-  });
-}
-
-// ---------- Zoom auto ----------
-function zoomToSelected(regions) {
-  if (!mapReady || !geoLayer) return;
-
-  const selected = (regions || []).map(normalizeName);
-  if (selected.length === 0) {
+  // Zoom auto sur wilayas sélectionnées
+  if (bounds.length > 0) {
+    map.fitBounds(bounds, { padding: [25, 25] });
+  } else {
     map.setView([28.0, 2.5], 5);
-    return;
   }
 
-  let bounds = null;
-
-  geoLayer.eachLayer((layer) => {
-    const feat = layer.feature;
-    const name =
-      feat?.properties?.name ||
-      feat?.properties?.NAME ||
-      feat?.properties?.wilaya ||
-      feat?.properties?.WILAYA ||
-      "";
-
-    if (selected.includes(normalizeName(name))) {
-      const b = layer.getBounds();
-      bounds = bounds ? bounds.extend(b) : b;
-    }
-  });
-
-  if (bounds && bounds.isValid()) {
-    map.fitBounds(bounds, { padding: [20, 20] });
-  }
+  setTimeout(() => map.invalidateSize(), 200);
 }
 
-// ---------- Refresh UI ----------
+// -------- Refresh UI ----------
 async function refresh() {
   const res = await fetch("/api/alert", { cache: "no-store" });
   const data = await res.json();
@@ -208,83 +125,89 @@ async function refresh() {
   const badge = document.getElementById("badge");
   const title = document.getElementById("title");
   const regionEl = document.getElementById("region");
-  const messageEl = document.getElementById("message");
-  const updatedAtEl = document.getElementById("updatedAt");
+  const message = document.getElementById("message");
+  const updatedAt = document.getElementById("updatedAt");
 
   const level = data.level || "none";
-  const active = !!data.active && level !== "none";
 
-  // Badge class + blink
-  if (badge) badge.className = "badge " + level + (active ? " blink" : "");
+  // badge classes
+  if (badge) badge.className = "badge " + level + (data.active ? " blink" : "");
 
-  // Heure
-  if (updatedAtEl) {
-    updatedAtEl.textContent = data.updatedAt
+  // récupérer les wilayas depuis plusieurs champs possibles
+  let regions = [];
+  if (Array.isArray(data.regions)) regions = data.regions;
+  else if (Array.isArray(data.zones)) regions = data.zones;
+  else if (Array.isArray(data.wilayas)) regions = data.wilayas;
+  else if (data.region) regions = [data.region];
+
+  // afficher texte wilayas
+  const regionsText = regions.filter(Boolean).join(" - ");
+
+  // cas aucune alerte
+  if (!data.active || level === "none") {
+    if (badge) badge.textContent = "✅ Aucune alerte";
+    if (title) title.textContent = "Aucune alerte";
+    if (message) message.textContent = "";
+    if (regionEl) regionEl.textContent = "";
+
+    // carte: afficher juste l'Algérie (sans sélection)
+    try {
+      const wilayasList = await loadWilayasDataset();
+      renderWilayasOnMap(wilayasList, [], "none");
+    } catch {
+      // si main.json manque, on laisse la carte vide
+    }
+  } else {
+    if (badge) badge.textContent = badgeText(level);
+    if (title) title.textContent = data.title || "ALERTE MÉTÉO";
+    if (message) message.textContent = data.message || "";
+
+    if (regionEl) {
+      regionEl.textContent = regionsText ? ("📍 Wilayas : " + regionsText) : "";
+    }
+
+    // carte: points + sélection
+    try {
+      const wilayasList = await loadWilayasDataset();
+      renderWilayasOnMap(wilayasList, regions, level);
+    } catch (e) {
+      // si main.json introuvable, pas d'indication
+      // (tu peux voir l'erreur dans la console navigateur)
+    }
+  }
+
+  // heure (updatedAt)
+  if (updatedAt) {
+    updatedAt.textContent = data.updatedAt
       ? new Date(data.updatedAt).toLocaleString("fr-FR")
       : "—";
   }
-
-  const regions = getRegions(data);
-
-  // Aucune alerte
-  if (!active) {
-    if (badge) badge.textContent = "✅ Aucune alerte";
-    if (title) title.textContent = "Aucune alerte";
-    if (messageEl) messageEl.textContent = "";
-    if (regionEl) regionEl.textContent = "";
-
-    if (markerLayer) markerLayer.clearLayers();
-    if (wilayasGeoJSON) {
-      renderWilayas([], "none");
-      zoomToSelected([]);
-    }
-    return;
-  }
-
-  // Alerte active
-  if (badge) badge.textContent = badgeText(level);
-  if (title) title.textContent = data.title || "ALERTE MÉTÉO";
-  if (messageEl) messageEl.textContent = data.message || "";
-  if (regionEl) regionEl.textContent = regions.length ? ("📍 Wilayas : " + regions.join(" - ")) : "";
-
-  // Carte pro (si GeoJSON existe)
-  if (wilayasGeoJSON) {
-    renderWilayas(regions, level);
-    renderIconsOnSelected(regions, level);
-    zoomToSelected(regions);
-  }
 }
 
-// ---------- Boutons Facebook ----------
-document.addEventListener("DOMContentLoaded", async () => {
-  initMapOnce();
-  await loadWilayasGeoJSON();
+// -------- Start ----------
+initMap();
+refresh();
+setInterval(refresh, 30000);
 
-  // Afficher carte grise si GeoJSON existe
-  if (wilayasGeoJSON) renderWilayas([], "none");
+// ✅ Bouton partager Facebook
+const shareFbBtn = document.getElementById("shareFbBtn");
+const copyLinkBtn = document.getElementById("copyLinkBtn");
 
-  // Boutons
-  const shareFbBtn = document.getElementById("shareFbBtn");
-  const copyLinkBtn = document.getElementById("copyLinkBtn");
+if (shareFbBtn) {
+  shareFbBtn.addEventListener("click", () => {
+    const url = encodeURIComponent(window.location.href);
+    window.open("https://www.facebook.com/sharer/sharer.php?u=" + url, "_blank");
+  });
+}
 
-  if (shareFbBtn) {
-    shareFbBtn.addEventListener("click", () => {
-      const url = encodeURIComponent(window.location.href);
-      window.open("https://www.facebook.com/sharer/sharer.php?u=" + url, "_blank");
-    });
-  }
-
-  if (copyLinkBtn) {
-    copyLinkBtn.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(window.location.href);
-        alert("Lien copié ✅");
-      } catch {
-        prompt("Copie manuelle :", window.location.href);
-      }
-    });
-  }
-
-  await refresh();
-  setInterval(refresh, 30000);
-});
+// ✅ Copier le lien
+if (copyLinkBtn) {
+  copyLinkBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      alert("Lien copié ✅");
+    } catch {
+      prompt("Copie manuelle :", window.location.href);
+    }
+  });
+    }
