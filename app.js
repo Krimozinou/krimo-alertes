@@ -1,15 +1,14 @@
 // ===============================
-// ✅ Krimo Alertes — app.js FINAL
-// ✅ Points rouges toujours visibles
-// ✅ Aucun bug main.json Render
-// ✅ Icône météo dans le titre
+// ✅ Krimo Alertes — app.js STABLE
+// ✅ Points affichés dès qu'il y a des wilayas
+// ✅ Ne dépend PLUS de active=true
+// ✅ Debug clair en bas
 // ===============================
 
 let map;
 let markersLayer;
 let wilayasIndex = null;
 
-// ---------- Normalisation ----------
 function normalizeName(s) {
   return (s || "")
     .toString()
@@ -22,7 +21,6 @@ function normalizeName(s) {
     .replace(/\s+/g, " ");
 }
 
-// ---------- Badge ----------
 function badgeText(level) {
   return (
     level === "yellow" ? "🟡 Vigilance Jaune" :
@@ -33,32 +31,30 @@ function badgeText(level) {
 }
 
 function badgeClass(level, active) {
+  // On garde le blink si active=true (optionnel)
   return "badge " + (level || "none") + (active ? " blink" : "");
 }
 
-// ---------- Icône météo ----------
 function detectIcon(title) {
-  title = normalizeName(title);
-
-  if (title.includes("orage")) return "⛈️";
-  if (title.includes("vent")) return "💨";
-  if (title.includes("pluie")) return "🌧️";
-  if (title.includes("neige")) return "❄️";
-
+  const t = normalizeName(title);
+  if (t.includes("orage")) return "⛈️";
+  if (t.includes("vent")) return "💨";
+  if (t.includes("pluie") || t.includes("inond")) return "🌧️";
+  if (t.includes("neige")) return "❄️";
   return "⚠️";
 }
 
-// ---------- Init Map ----------
+function setDebug(msg) {
+  const dbg = document.getElementById("debug");
+  if (dbg) dbg.textContent = msg || "";
+}
+
 function initMapIfNeeded() {
   const mapDiv = document.getElementById("map");
   if (!mapDiv) return;
-
   if (map) return;
 
-  map = L.map("map", {
-    zoomControl: true,
-    scrollWheelZoom: false,
-  });
+  map = L.map("map", { zoomControl: true, scrollWheelZoom: false });
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 18,
@@ -69,21 +65,20 @@ function initMapIfNeeded() {
 
   map.setView([28.0, 2.5], 5);
 
-  setTimeout(() => map.invalidateSize(), 500);
+  // Important sur mobile / Render
+  setTimeout(() => map.invalidateSize(), 600);
 }
 
-// ---------- Charger main.json ----------
 async function loadWilayasIndex() {
   if (wilayasIndex) return wilayasIndex;
 
   const res = await fetch("/main.json", { cache: "no-store" });
-
-  if (!res.ok) throw new Error("main.json introuvable");
+  if (!res.ok) throw new Error("main.json introuvable (" + res.status + ")");
 
   const data = await res.json();
   const list = Array.isArray(data.wilayas) ? data.wilayas : [];
 
-  wilayasIndex = new Map();
+  const idx = new Map();
 
   for (const w of list) {
     const name = w.name;
@@ -92,43 +87,43 @@ async function loadWilayasIndex() {
 
     if (!name || !isFinite(lat) || !isFinite(lon)) continue;
 
-    wilayasIndex.set(normalizeName(name), { name, lat, lon });
-
-    // ✅ Alger alias
-    if (normalizeName(name) === "algiers") {
-      wilayasIndex.set("alger", { name, lat, lon });
-    }
-    if (normalizeName(name) === "alger") {
-      wilayasIndex.set("algiers", { name, lat, lon });
-    }
+    idx.set(normalizeName(name), { name, lat, lon });
   }
 
+  // Alias simple “alger”
+  if (idx.has("algiers") && !idx.has("alger")) idx.set("alger", idx.get("algiers"));
+  if (idx.has("alger") && !idx.has("algiers")) idx.set("algiers", idx.get("alger"));
+
+  wilayasIndex = idx;
   return wilayasIndex;
 }
 
-// ---------- Nettoyer points ----------
 function clearMarkers() {
   if (markersLayer) markersLayer.clearLayers();
 }
 
-// ---------- Ajouter points rouges ----------
 function addMarkersFor(wilayas) {
   if (!map || !markersLayer || !wilayasIndex) return;
 
   clearMarkers();
 
   const bounds = [];
+  let added = 0;
+  const missing = [];
 
-  wilayas.forEach((w) => {
+  for (const w of wilayas) {
     const found = wilayasIndex.get(normalizeName(w));
-    if (!found) return;
+    if (!found) {
+      missing.push(w);
+      continue;
+    }
 
-    // ✅ POINT ROUGE GARANTI
+    // ✅ Point rouge très visible
     const marker = L.circleMarker([found.lat, found.lon], {
       radius: 10,
-      color: "#ff0000",       // contour rouge
-      fillColor: "#ff0000",   // remplissage rouge
-      fillOpacity: 1,         // visible à 100%
+      color: "#ff0000",
+      fillColor: "#ff0000",
+      fillOpacity: 1,
       weight: 3,
     });
 
@@ -136,25 +131,28 @@ function addMarkersFor(wilayas) {
     marker.bindPopup("📍 " + found.name);
 
     bounds.push([found.lat, found.lon]);
-  });
-
-  if (bounds.length === 1) {
-    map.setView(bounds[0], 8);
-  } else if (bounds.length > 1) {
-    map.fitBounds(bounds, { padding: [40, 40] });
+    added++;
   }
+
+  if (bounds.length === 1) map.setView(bounds[0], 8);
+  if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40] });
+
+  setDebug(
+    `✅ Points: ${added}/${wilayas.length}` +
+    (missing.length ? ` — Introuvables: ${missing.join(", ")}` : "")
+  );
 }
 
-// ---------- Refresh ----------
 async function refresh() {
   initMapIfNeeded();
 
   let alertData;
-
   try {
     const res = await fetch("/api/alert", { cache: "no-store" });
+    if (!res.ok) throw new Error("api/alert " + res.status);
     alertData = await res.json();
-  } catch {
+  } catch (e) {
+    setDebug("⚠️ Erreur chargement api/alert");
     return;
   }
 
@@ -164,30 +162,23 @@ async function refresh() {
   const message = document.getElementById("message");
   const updatedAt = document.getElementById("updatedAt");
 
-  const active = !!alertData.active;
   const level = alertData.level || "none";
+  const active = !!alertData.active;
 
-  const wilayas = Array.isArray(alertData.regions)
-    ? alertData.regions
-    : [];
+  const wilayas = Array.isArray(alertData.regions) ? alertData.regions : [];
 
   if (badge) {
     badge.className = badgeClass(level, active);
     badge.textContent = badgeText(level);
   }
 
-  // ✅ Titre + icône
   if (title) {
     const icon = detectIcon(alertData.title);
     title.textContent = icon + " " + (alertData.title || "Aucune alerte");
   }
 
-  // Wilaya text
   if (region) {
-    region.textContent =
-      wilayas.length > 0
-        ? "📍 Wilayas : " + wilayas.join(" - ")
-        : "";
+    region.textContent = wilayas.length ? "📍 Wilayas : " + wilayas.join(" - ") : "";
   }
 
   if (message) message.textContent = alertData.message || "";
@@ -198,19 +189,22 @@ async function refresh() {
       : "—";
   }
 
-  // ✅ Charger points seulement si alerte active
-  if (active && wilayas.length > 0) {
+  // ✅ IMPORTANT : on affiche les points dès qu’il y a des wilayas
+  // (et que ce n’est pas "none"), même si active=false
+  if (wilayas.length > 0 && level !== "none") {
     try {
       await loadWilayasIndex();
-      addMarkersFor(wilayas);
-    } catch {
-      console.log("Erreur main.json");
+      // petit délai pour éviter le bug mobile (map pas “prête”)
+      setTimeout(() => addMarkersFor(wilayas), 350);
+    } catch (e) {
+      setDebug("⚠️ Problème chargement main.json");
+      clearMarkers();
     }
   } else {
     clearMarkers();
+    setDebug("");
   }
 }
 
-// ---------- Start ----------
 refresh();
 setInterval(refresh, 15000);
